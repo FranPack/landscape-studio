@@ -1,0 +1,283 @@
+<script setup lang="ts">
+import { ref, watch, onMounted, onUnmounted } from 'vue'
+import Konva from 'konva'
+
+interface Plant {
+  id: number
+  src: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleX: number
+  scaleY: number
+  rotation: number
+}
+
+const props = defineProps<{
+  backgroundImage: string | null
+  plants: Plant[]
+}>()
+
+const emit = defineEmits<{
+  'selection-changed': [id: number | null]
+}>()
+
+const wrapperRef = ref<HTMLDivElement | null>(null)
+const canvasEl = ref<HTMLDivElement | null>(null)
+
+let stage: Konva.Stage
+let bgLayer: Konva.Layer
+let plantLayer: Konva.Layer
+let transformer: Konva.Transformer
+
+onMounted(() => {
+  initStage()
+  window.addEventListener('resize', onResize)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  stage?.destroy()
+})
+
+function initStage() {
+  const { width, height } = wrapperRef.value!.getBoundingClientRect()
+
+  stage = new Konva.Stage({
+    container: canvasEl.value!,
+    width,
+    height,
+  })
+
+  bgLayer = new Konva.Layer()
+  plantLayer = new Konva.Layer()
+  stage.add(bgLayer)
+  stage.add(plantLayer)
+
+  transformer = new Konva.Transformer({
+    rotateEnabled: true,
+    borderStroke: '#7ec87e',
+    anchorStroke: '#7ec87e',
+    anchorFill: '#fff',
+    anchorSize: 10,
+  })
+  plantLayer.add(transformer)
+
+  stage.on('click tap', (e) => {
+    if (e.target === stage) {
+      transformer.nodes([])
+      emit('selection-changed', null)
+    }
+  })
+}
+
+function onResize() {
+  if (!stage || !wrapperRef.value) return
+  const { width, height } = wrapperRef.value.getBoundingClientRect()
+  stage.width(width)
+  stage.height(height)
+  drawBackground()
+}
+
+watch(() => props.backgroundImage, drawBackground)
+
+function drawBackground() {
+  if (!props.backgroundImage || !stage) return
+  bgLayer.destroyChildren()
+
+  const img = new Image()
+  img.onload = () => {
+    const sw = stage.width()
+    const sh = stage.height()
+    const scale = Math.min(sw / img.width, sh / img.height)
+    const w = img.width * scale
+    const h = img.height * scale
+
+    const kImg = new Konva.Image({
+      image: img,
+      x: (sw - w) / 2,
+      y: (sh - h) / 2,
+      width: w,
+      height: h,
+    })
+    bgLayer.add(kImg)
+    bgLayer.draw()
+  }
+  img.src = props.backgroundImage
+}
+
+watch(() => props.plants, syncPlants, { deep: true })
+
+function syncPlants(newPlants: Plant[]) {
+  if (!plantLayer) return
+
+  // Remove plants that no longer exist
+  plantLayer
+    .getChildren((node) => node.name() === 'plant')
+    .forEach((node) => {
+      if (!newPlants.find((p) => p.id === Number(node.id()))) {
+        if (transformer.nodes().includes(node)) {
+          transformer.nodes([])
+          emit('selection-changed', null)
+        }
+        node.destroy()
+      }
+    })
+
+  // Add new plants
+  newPlants.forEach((plant) => {
+    if (plantLayer.findOne(`#${plant.id}`)) return
+
+    const img = new Image()
+    img.onload = () => {
+      const node = new Konva.Image({
+        id: String(plant.id),
+        name: 'plant',
+        image: img,
+        x: plant.x,
+        y: plant.y,
+        width: plant.width,
+        height: plant.height,
+        scaleX: plant.scaleX,
+        scaleY: plant.scaleY,
+        rotation: plant.rotation,
+        draggable: true,
+        offsetX: plant.width / 2,
+        offsetY: plant.height / 2,
+      })
+
+      node.on('click tap', () => {
+        transformer.nodes([node])
+        emit('selection-changed', plant.id)
+        plantLayer.draw()
+      })
+
+      node.on('transformend dragend', () => {
+        plant.x = node.x()
+        plant.y = node.y()
+        plant.scaleX = node.scaleX()
+        plant.scaleY = node.scaleY()
+        plant.rotation = node.rotation()
+      })
+
+      plantLayer.add(node)
+      transformer.moveToTop()
+      plantLayer.draw()
+    }
+    img.src = plant.src
+  })
+}
+
+// Watch for flip changes
+watch(
+  () => props.plants.map((p) => p.scaleX),
+  () => {
+    props.plants.forEach((plant) => {
+      const node = plantLayer?.findOne(`#${plant.id}`) as Konva.Image
+      if (node) {
+        node.scaleX(plant.scaleX)
+        plantLayer.draw()
+      }
+    })
+  },
+)
+
+function exportImage() {
+  if (!stage) return
+  transformer.nodes([])
+  plantLayer.draw()
+
+  const dataURL = stage.toDataURL({ pixelRatio: 2 })
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+
+  if (isMobile) {
+    // Open in new tab so user can long press to save
+    const win = window.open()
+    if (win) {
+      win.document.write(`
+        <html>
+          <head><title>Save Your Design</title></head>
+          <body style="margin:0;background:#000;display:flex;flex-direction:column;align-items:center;padding:20px;font-family:sans-serif;color:#fff;">
+            <p style="margin-bottom:12px">Long press the image and tap <strong>Save Image</strong></p>
+            <img src="${dataURL}" style="max-width:100%;border-radius:8px;" />
+          </body>
+        </html>
+      `)
+    }
+  } else {
+    const a = document.createElement('a')
+    a.href = dataURL
+    a.download = 'landscape-design.png'
+    a.click()
+  }
+}
+function clearSelection() {
+  transformer.nodes([])
+  plantLayer.draw()
+}
+
+defineExpose({
+  exportImage,
+  getCenter: () => ({
+    x: stage?.width() / 2,
+    y: stage?.height() / 2,
+  }),
+  getCanvasPosition: (clientX: number, clientY: number) => {
+    const rect = canvasEl.value?.getBoundingClientRect()
+    if (!rect) return null
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top,
+    }
+  },
+  clearSelection,
+})
+</script>
+
+<template>
+  <div class="canvas-wrapper" ref="wrapperRef">
+    <div v-if="!backgroundImage" class="empty-state">
+      <div class="empty-icon">🌿</div>
+      <p>Upload a photo of your yard to get started</p>
+      <p class="hint">Then click any plant in the sidebar to place it</p>
+    </div>
+    <div ref="canvasEl" v-show="backgroundImage" />
+  </div>
+</template>
+
+<style scoped>
+.canvas-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #111;
+}
+
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #555;
+}
+
+.empty-icon {
+  font-size: 64px;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: #666;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+  color: #444;
+}
+</style>

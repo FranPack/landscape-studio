@@ -1,0 +1,165 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useDragStore } from '@/stores/dragStore'
+
+interface PlantAsset {
+  name: string
+  src: string
+}
+
+defineEmits<{
+  'plant-selected': [plant: PlantAsset]
+}>()
+
+const drag = useDragStore()
+const search = ref('')
+
+function makePlaceholder(emoji: string, bg: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+    <rect width="120" height="120" rx="12" fill="${bg}"/>
+    <text x="60" y="75" text-anchor="middle" font-size="52">${emoji}</text>
+  </svg>`
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+}
+
+const plants: PlantAsset[] = [
+  { name: 'Oak Tree', src: makePlaceholder('🌳', '#4a7c4a') },
+  { name: 'Pine Tree', src: makePlaceholder('🌲', '#2d5a2d') },
+  { name: 'Rose Bush', src: makePlaceholder('🌹', '#8a3a5a') },
+  { name: 'Hydrangea', src: makePlaceholder('💐', '#6a5a8a') },
+  { name: 'Boxwood', src: makePlaceholder('🟢', '#3a6a3a') },
+  { name: 'Lavender', src: makePlaceholder('💜', '#7a5a9a') },
+  { name: 'Japanese Maple', src: makePlaceholder('🍁', '#8a3a2a') },
+  { name: 'Ornamental Grass', src: makePlaceholder('🌾', '#8a7a3a') },
+  { name: 'Azalea', src: makePlaceholder('🌸', '#9a4a6a') },
+  { name: 'Juniper', src: makePlaceholder('🌿', '#3a5a3a') },
+  { name: 'Magnolia', src: makePlaceholder('🌺', '#9a7a5a') },
+  { name: 'Fountain Grass', src: makePlaceholder('🎋', '#6a8a4a') },
+]
+
+const filteredPlants = computed(() =>
+  plants.filter((p) => p.name.toLowerCase().includes(search.value.toLowerCase())),
+)
+
+function onMouseDown(e: MouseEvent, plant: PlantAsset) {
+  drag.startDrag(plant, e.clientX, e.clientY)
+}
+
+function onTouchStart(e: TouchEvent, plant: PlantAsset) {
+  const touch = e.touches[0]
+  if (!touch) return
+  drag.startDrag(plant, touch.clientX, touch.clientY)
+}
+</script>
+
+<template>
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h3>Plants</h3>
+      <input v-model="search" class="search" type="text" placeholder="Search plants..." />
+    </div>
+    <div class="plant-grid">
+      <div
+        v-for="plant in filteredPlants"
+        :key="plant.name"
+        class="plant-card"
+        @mousedown="onMouseDown($event, plant)"
+        @touchstart.prevent="onTouchStart($event, plant)"
+        @dragstart.prevent
+        @click="$emit('plant-selected', plant)"
+      >
+        <div class="plant-thumb">
+          <img :src="plant.src" :alt="plant.name" draggable="false"/>
+        </div>
+        <span class="plant-name">{{ plant.name }}</span>
+      </div>
+    </div>
+  </aside>
+</template>
+
+<style scoped>
+.sidebar {
+  width: 220px;
+  background: #222;
+  border-right: 1px solid #333;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 12px;
+  border-bottom: 1px solid #333;
+}
+
+.sidebar-header h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.search {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #333;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+}
+
+.search:focus {
+  border-color: #7ec87e;
+}
+
+.plant-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-content: start;
+}
+
+.plant-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.plant-card:hover {
+  background: #333;
+  border-color: #7ec87e;
+}
+
+.plant-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #2a2a2a;
+}
+
+.plant-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.plant-name {
+  font-size: 11px;
+  color: #aaa;
+  text-align: center;
+  line-height: 1.2;
+}
+</style>
