@@ -7,7 +7,7 @@ interface PlantAsset {
   src: string
 }
 
-defineEmits<{
+const emit = defineEmits<{
   'plant-selected': [plant: PlantAsset]
 }>()
 
@@ -41,8 +41,34 @@ const filteredPlants = computed(() =>
   plants.filter((p) => p.name.toLowerCase().includes(search.value.toLowerCase())),
 )
 
+let pendingPlant: PlantAsset | null = null
+let didDrag = false
+
 function onMouseDown(e: MouseEvent, plant: PlantAsset) {
-  drag.startDrag(plant, e.clientX, e.clientY)
+  pendingPlant = plant
+  didDrag = false
+
+  const onMouseMove = (me: MouseEvent) => {
+    if (!didDrag && pendingPlant) {
+      didDrag = true
+      drag.startDrag(pendingPlant, me.clientX, me.clientY)
+    }
+  }
+
+  const onMouseUp = () => {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    pendingPlant = null
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+function onClick(_e: MouseEvent, plant: PlantAsset) {
+  if (!didDrag) {
+    emit('plant-selected', plant)
+  }
 }
 
 function onTouchStart(e: TouchEvent, plant: PlantAsset) {
@@ -66,10 +92,10 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
         @mousedown="onMouseDown($event, plant)"
         @touchstart.prevent="onTouchStart($event, plant)"
         @dragstart.prevent
-        @click="$emit('plant-selected', plant)"
+        @click="onClick($event, plant)"
       >
         <div class="plant-thumb">
-          <img :src="plant.src" :alt="plant.name" draggable="false"/>
+          <img :src="plant.src" :alt="plant.name" draggable="false" />
         </div>
         <span class="plant-name">{{ plant.name }}</span>
       </div>

@@ -1,4 +1,4 @@
-import { contextBridge as o } from "electron";
-o.exposeInMainWorld("electronAPI", {
+import { contextBridge } from "electron";
+contextBridge.exposeInMainWorld("electronAPI", {
   platform: process.platform
 });

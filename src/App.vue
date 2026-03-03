@@ -204,6 +204,7 @@ body {
 .app {
   display: flex;
   height: 100vh;
+  user-select: none;
 }
 
 .canvas-area {

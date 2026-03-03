@@ -1,25 +1,30 @@
-import { app as e, BrowserWindow as n } from "electron";
-import { fileURLToPath as a } from "url";
-import o from "path";
-const i = o.dirname(a(import.meta.url)), l = process.env.NODE_ENV === "development";
-function r() {
-  const t = new n({
+import { app, BrowserWindow } from "electron";
+import { fileURLToPath } from "url";
+import path from "path";
+const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
+const isDev = process.env.NODE_ENV === "development";
+function createWindow() {
+  const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1e3,
     minHeight: 600,
     webPreferences: {
-      preload: o.join(i, "preload.js"),
-      contextIsolation: !0
+      preload: path.join(__dirname$1, "preload.js"),
+      contextIsolation: true
     },
     title: "Landscape Studio"
   });
-  l ? t.loadURL("http://localhost:5173") : t.loadFile(o.join(i, "../dist/index.html"));
+  if (isDev) {
+    win.loadURL("http://localhost:5173");
+  } else {
+    win.loadFile(path.join(__dirname$1, "../dist/index.html"));
+  }
 }
-e.whenReady().then(r);
-e.on("window-all-closed", () => {
-  process.platform !== "darwin" && e.quit();
+app.whenReady().then(createWindow);
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") app.quit();
 });
-e.on("activate", () => {
-  n.getAllWindows().length === 0 && r();
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
