@@ -71,6 +71,87 @@ function initStage() {
       emit('selection-changed', null)
     }
   })
+  stage.on('wheel', (e) => {
+    e.evt.preventDefault()
+
+    const scaleBy = 1.05
+    const oldScale = stage.scaleX()
+    const pointer = stage.getPointerPosition()!
+
+    const mousePointTo = {
+      x: (pointer.x - stage.x()) / oldScale,
+      y: (pointer.y - stage.y()) / oldScale,
+    }
+
+    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
+    const clamped = Math.max(0.2, Math.min(5, newScale))
+
+    stage.scale({ x: clamped, y: clamped })
+    stage.position({
+      x: pointer.x - mousePointTo.x * clamped,
+      y: pointer.y - mousePointTo.y * clamped,
+    })
+  })
+  let isPanning = false
+  let panStart = { x: 0, y: 0 }
+
+  stage.on('mousedown', (e) => {
+    if (e.evt.button !== 1) return // middle button only
+    e.evt.preventDefault()
+    isPanning = true
+    panStart = { x: e.evt.clientX - stage.x(), y: e.evt.clientY - stage.y() }
+  })
+
+  stage.on('mousemove', (e) => {
+    if (!isPanning) return
+    stage.position({
+      x: e.evt.clientX - panStart.x,
+      y: e.evt.clientY - panStart.y,
+    })
+  })
+
+  stage.on('mouseup', () => {
+    isPanning = false
+  })
+  let isSpacePanning = false
+  let spaceDown = false
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && !spaceDown) {
+      spaceDown = true
+      stage.container().style.cursor = 'grab'
+    }
+  })
+
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space') {
+      spaceDown = false
+      isSpacePanning = false
+      stage.container().style.cursor = 'default'
+    }
+  })
+
+  stage.on('mousedown', (e) => {
+    if (e.evt.button === 0 && spaceDown) {
+      isSpacePanning = true
+      panStart = { x: e.evt.clientX - stage.x(), y: e.evt.clientY - stage.y() }
+      stage.container().style.cursor = 'grabbing'
+    }
+  })
+
+  stage.on('mousemove', (e) => {
+    if (isSpacePanning) {
+      stage.position({
+        x: e.evt.clientX - panStart.x,
+        y: e.evt.clientY - panStart.y,
+      })
+    }
+  })
+
+  stage.on('mouseup', () => {
+    isSpacePanning = false
+    if (spaceDown) stage.container().style.cursor = 'grab'
+  })
 }
 
 function onResize() {
@@ -218,22 +299,35 @@ function clearSelection() {
   transformer.nodes([])
   plantLayer.draw()
 }
+function resetZoom() {
+  stage.scale({ x: 1, y: 1 })
+  stage.position({ x: 0, y: 0 })
+}
 
 defineExpose({
   exportImage,
-  getCenter: () => ({
-    x: stage?.width() / 2,
-    y: stage?.height() / 2,
-  }),
+  getCenter: () => {
+    const scale = stage.scaleX()
+    return {
+      x: (stage.width() / 2 - stage.x()) / scale,
+      y: (stage.height() / 2 - stage.y()) / scale,
+    }
+  },
+
   getCanvasPosition: (clientX: number, clientY: number) => {
     const rect = canvasEl.value?.getBoundingClientRect()
     if (!rect) return null
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom)
+      return null
+    const scale = stage.scaleX()
     return {
-      x: clientX - rect.left,
-      y: clientY - rect.top,
+      x: (clientX - rect.left - stage.x()) / scale,
+      y: (clientY - rect.top - stage.y()) / scale,
     }
   },
+
   clearSelection,
+  resetZoom,
 })
 </script>
 

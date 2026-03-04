@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useDragStore } from '@/stores/dragStore'
 import Sidebar from '@/components/AppSidebar.vue'
 import Toolbar from '@/components/AppToolbar.vue'
@@ -25,6 +25,7 @@ interface Plant {
 const backgroundImage = ref<string | null>(null)
 const plants = ref<Plant[]>([])
 const selectedId = ref<number | null>(null)
+let nextPlantId = 1
 const fileInput = ref<HTMLInputElement | null>(null)
 const canvasRef = ref<InstanceType<typeof CanvasView> | null>(null)
 
@@ -47,7 +48,7 @@ function addPlant(plant: { src: string; name: string }, x?: number, y?: number) 
   history.push(plants.value)
   const center = canvasRef.value?.getCenter() ?? { x: 200, y: 200 }
   plants.value.push({
-    id: Date.now(),
+    id: nextPlantId++,
     src: plant.src,
     name: plant.name,
     x: x ?? center.x,
@@ -87,12 +88,7 @@ function onMouseMove(e: MouseEvent) {
 function onMouseUp(e: MouseEvent) {
   if (!drag.dragging || !drag.plant) return
   const pos = canvasRef.value?.getCanvasPosition(e.clientX, e.clientY)
-  if (pos) {
-    addPlant(drag.plant, pos.x, pos.y)
-  } else {
-    // dropped outside canvas, place in center
-    addPlant(drag.plant)
-  }
+  if (pos) addPlant(drag.plant, pos.x, pos.y)
   drag.endDrag()
 }
 
@@ -109,11 +105,7 @@ function onTouchEnd(e: TouchEvent) {
   const touch = e.changedTouches[0]
   if (!touch) return
   const pos = canvasRef.value?.getCanvasPosition(touch.clientX, touch.clientY)
-  if (pos) {
-    addPlant(drag.plant, pos.x, pos.y)
-  } else {
-    addPlant(drag.plant)
-  }
+  if (pos) addPlant(drag.plant, pos.x, pos.y)
   drag.endDrag()
 }
 function undo() {
@@ -131,6 +123,10 @@ function redo() {
     selectedId.value = null
   }
 }
+function resetZoom() {
+  canvasRef.value?.resetZoom()
+}
+
 useKeyboard({
   onDelete: deleteSelected,
   onEscape: () => {
@@ -139,6 +135,12 @@ useKeyboard({
   },
   onUndo: undo,
   onRedo: redo,
+  onReset: resetZoom,
+})
+onMounted(() => {
+  if (import.meta.env.DEV) {
+    backgroundImage.value = '/default.png'
+  }
 })
 </script>
 
@@ -160,6 +162,7 @@ useKeyboard({
         @delete-selected="deleteSelected"
         @flip-selected="flipSelected"
         @export="exportImage"
+        @reset-zoom="resetZoom"
       />
       <CanvasView
         ref="canvasRef"

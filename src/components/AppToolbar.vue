@@ -8,6 +8,7 @@ defineEmits<{
   'upload-photo': []
   'delete-selected': []
   'flip-selected': []
+  'reset-zoom': []
   export: []
 }>()
 </script>
@@ -18,30 +19,16 @@ defineEmits<{
       <span class="app-name">🌿 Landscape Studio</span>
     </div>
     <div class="toolbar-center">
-      <button class="btn btn-primary" @click="$emit('upload-photo')">
-        📷 Upload Photo
-      </button>
-      <button
-        class="btn"
-        :disabled="!hasSelection"
-        @click="$emit('flip-selected')"
-      >
-        ↔ Flip
-      </button>
-      <button
-        class="btn btn-danger"
-        :disabled="!hasSelection"
-        @click="$emit('delete-selected')"
-      >
+      <button class="btn btn-primary" @click="$emit('upload-photo')">📷 Upload Photo</button>
+      <button class="btn" @click="$emit('reset-zoom')">⊙ Reset Zoom</button>
+
+      <button class="btn" :disabled="!hasSelection" @click="$emit('flip-selected')">↔ Flip</button>
+      <button class="btn btn-danger" :disabled="!hasSelection" @click="$emit('delete-selected')">
         🗑 Delete
       </button>
     </div>
     <div class="toolbar-right">
-      <button
-        class="btn btn-success"
-        :disabled="!hasPhoto"
-        @click="$emit('export')"
-      >
+      <button class="btn btn-success" :disabled="!hasPhoto" @click="$emit('export')">
         💾 Export
       </button>
     </div>

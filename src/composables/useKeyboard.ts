@@ -5,6 +5,7 @@ interface Options {
   onEscape: () => void
   onUndo: () => void
   onRedo: () => void
+  onReset: () => void
 }
 
 export function useKeyboard(options: Options) {
@@ -32,6 +33,11 @@ export function useKeyboard(options: Options) {
       e.preventDefault()
       options.onRedo()
     }
+    if ((e.ctrlKey || e.metaKey) && e.key === '0' && !e.shiftKey) {
+      e.preventDefault()
+      options.onReset()
+    }
+    if (e.code === 'Space') e.preventDefault()
   }
 
   onMounted(() => window.addEventListener('keydown', onKeyDown))
