@@ -21,14 +21,14 @@ export function useKeyboard(options: Options) {
       options.onEscape()
     }
 
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
       e.preventDefault()
       options.onUndo()
     }
 
     if (
       ((e.ctrlKey || e.metaKey) && e.key === 'y') ||
-      ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'z')
+      ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
     ) {
       e.preventDefault()
       options.onRedo()

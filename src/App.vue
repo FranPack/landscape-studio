@@ -169,6 +169,7 @@ onMounted(() => {
         :background-image="backgroundImage"
         :plants="plants"
         @selection-changed="selectedId = $event"
+        @push-history="history.push(plants)"
       />
       <input
         ref="fileInput"

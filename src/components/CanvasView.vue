@@ -22,6 +22,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'selection-changed': [id: number | null]
+  'push-history': []
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -31,10 +32,12 @@ let stage: Konva.Stage
 let bgLayer: Konva.Layer
 let plantLayer: Konva.Layer
 let transformer: Konva.Transformer
+let isUpdating = false
 
 onMounted(() => {
   initStage()
   window.addEventListener('resize', onResize)
+  drawBackground()
 })
 
 onUnmounted(() => {
@@ -99,6 +102,7 @@ function initStage() {
     if (e.evt.button !== 1) return // middle button only
     e.evt.preventDefault()
     isPanning = true
+    stage.container().style.cursor = 'grabbing'
     panStart = { x: e.evt.clientX - stage.x(), y: e.evt.clientY - stage.y() }
   })
 
@@ -112,12 +116,15 @@ function initStage() {
 
   stage.on('mouseup', () => {
     isPanning = false
+    stage.container().style.cursor = 'default'
   })
   let isSpacePanning = false
   let spaceDown = false
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space' && !spaceDown) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
       spaceDown = true
       stage.container().style.cursor = 'grab'
     }
@@ -125,6 +132,8 @@ function initStage() {
 
   window.addEventListener('keyup', (e) => {
     if (e.code === 'Space') {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
       spaceDown = false
       isSpacePanning = false
       stage.container().style.cursor = 'default'
@@ -162,7 +171,7 @@ function onResize() {
   drawBackground()
 }
 
-watch(() => props.backgroundImage, drawBackground)
+watch(() => props.backgroundImage, drawBackground, { immediate: true })
 
 function drawBackground() {
   if (!props.backgroundImage || !stage) return
@@ -207,6 +216,20 @@ function syncPlants(newPlants: Plant[]) {
       }
     })
 
+  // Update existing plants (handles undo/redo position changes)
+  isUpdating = true
+  newPlants.forEach((plant) => {
+    const node = plantLayer.findOne(`#${plant.id}`) as Konva.Image
+    if (!node) return
+    node.x(plant.x)
+    node.y(plant.y)
+    node.scaleX(plant.scaleX)
+    node.scaleY(plant.scaleY)
+    node.rotation(plant.rotation)
+  })
+  isUpdating = false
+  plantLayer.draw()
+
   // Add new plants
   newPlants.forEach((plant) => {
     if (plantLayer.findOne(`#${plant.id}`)) return
@@ -242,7 +265,9 @@ function syncPlants(newPlants: Plant[]) {
         plant.scaleY = node.scaleY()
         plant.rotation = node.rotation()
       })
-
+      node.on('dragstart transformstart', () => {
+        if (!isUpdating) emit('push-history')
+      })
       plantLayer.add(node)
       transformer.moveToTop()
       plantLayer.draw()
@@ -250,20 +275,6 @@ function syncPlants(newPlants: Plant[]) {
     img.src = plant.src
   })
 }
-
-// Watch for flip changes
-watch(
-  () => props.plants.map((p) => p.scaleX),
-  () => {
-    props.plants.forEach((plant) => {
-      const node = plantLayer?.findOne(`#${plant.id}`) as Konva.Image
-      if (node) {
-        node.scaleX(plant.scaleX)
-        plantLayer.draw()
-      }
-    })
-  },
-)
 
 function exportImage() {
   if (!stage) return
