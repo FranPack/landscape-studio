@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:en.wikipedia.org)",
+      "WebFetch(domain:en.m.wikipedia.org)",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(compatible; landscape-studio/1.0\\)\" \"https://en.wikipedia.org/api/rest_v1/page/summary/Acer_palmatum\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\(''thumbnail'',{}\\).get\\(''source'',''NO THUMBNAIL''\\)\\)\")",
+      "Bash(curl -s -A \"Mozilla/5.0 \\(compatible; LandscapeStudio/1.0; mailto:contact@example.com\\)\" \"https://en.wikipedia.org/api/rest_v1/page/summary/Ilex_aquifolium\")"
+    ]
+  }
+}

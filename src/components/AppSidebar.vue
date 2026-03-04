@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useDragStore } from '@/stores/dragStore'
-
-interface PlantAsset {
-  name: string
-  src: string
-}
+import { PLANTS, type PlantAsset } from '@/data/plants'
 
 const emit = defineEmits<{
   'plant-selected': [plant: PlantAsset]
@@ -14,28 +10,7 @@ const emit = defineEmits<{
 const drag = useDragStore()
 const search = ref('')
 
-function makePlaceholder(emoji: string, bg: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
-    <rect width="120" height="120" rx="12" fill="${bg}"/>
-    <text x="60" y="75" text-anchor="middle" font-size="52">${emoji}</text>
-  </svg>`
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
-}
-
-const plants: PlantAsset[] = [
-  { name: 'Oak Tree', src: makePlaceholder('🌳', '#4a7c4a') },
-  { name: 'Pine Tree', src: makePlaceholder('🌲', '#2d5a2d') },
-  { name: 'Rose Bush', src: makePlaceholder('🌹', '#8a3a5a') },
-  { name: 'Hydrangea', src: makePlaceholder('💐', '#6a5a8a') },
-  { name: 'Boxwood', src: makePlaceholder('🟢', '#3a6a3a') },
-  { name: 'Lavender', src: makePlaceholder('💜', '#7a5a9a') },
-  { name: 'Japanese Maple', src: makePlaceholder('🍁', '#8a3a2a') },
-  { name: 'Ornamental Grass', src: makePlaceholder('🌾', '#8a7a3a') },
-  { name: 'Azalea', src: makePlaceholder('🌸', '#9a4a6a') },
-  { name: 'Juniper', src: makePlaceholder('🌿', '#3a5a3a') },
-  { name: 'Magnolia', src: makePlaceholder('🌺', '#9a7a5a') },
-  { name: 'Fountain Grass', src: makePlaceholder('🎋', '#6a8a4a') },
-]
+const plants = PLANTS
 
 const filteredPlants = computed(() =>
   plants.filter((p) => p.name.toLowerCase().includes(search.value.toLowerCase())),
