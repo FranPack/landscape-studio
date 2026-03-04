@@ -185,6 +185,7 @@ function drawBackground() {
   bgLayer.destroyChildren()
 
   const img = new Image()
+  img.crossOrigin = 'anonymous'
   img.onload = () => {
     const sw = stage.width()
     const sh = stage.height()
@@ -242,6 +243,7 @@ function syncPlants(newPlants: Plant[]) {
     if (plantLayer.findOne(`#${plant.id}`)) return
 
     const img = new Image()
+    img.crossOrigin = 'anonymous'
     img.onload = () => {
       const node = new Konva.Image({
         id: String(plant.id),
