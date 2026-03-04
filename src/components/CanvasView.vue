@@ -33,6 +33,8 @@ let bgLayer: Konva.Layer
 let plantLayer: Konva.Layer
 let transformer: Konva.Transformer
 let isUpdating = false
+let spaceKeyDown: (e: KeyboardEvent) => void
+let spaceKeyUp: (e: KeyboardEvent) => void
 
 onMounted(() => {
   initStage()
@@ -42,6 +44,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
+  window.removeEventListener('keydown', spaceKeyDown)
+  window.removeEventListener('keyup', spaceKeyUp)
   stage?.destroy()
 })
 
@@ -121,16 +125,16 @@ function initStage() {
   let isSpacePanning = false
   let spaceDown = false
 
-  window.addEventListener('keydown', (e) => {
+  spaceKeyDown = (e) => {
     if (e.code === 'Space' && !spaceDown) {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       spaceDown = true
       stage.container().style.cursor = 'grab'
     }
-  })
+  }
 
-  window.addEventListener('keyup', (e) => {
+  spaceKeyUp = (e) => {
     if (e.code === 'Space') {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
@@ -138,7 +142,10 @@ function initStage() {
       isSpacePanning = false
       stage.container().style.cursor = 'default'
     }
-  })
+  }
+
+  window.addEventListener('keydown', spaceKeyDown)
+  window.addEventListener('keyup', spaceKeyUp)
 
   stage.on('mousedown', (e) => {
     if (e.evt.button === 0 && spaceDown) {
@@ -259,11 +266,13 @@ function syncPlants(newPlants: Plant[]) {
       })
 
       node.on('transformend dragend', () => {
-        plant.x = node.x()
-        plant.y = node.y()
-        plant.scaleX = node.scaleX()
-        plant.scaleY = node.scaleY()
-        plant.rotation = node.rotation()
+        const p = props.plants.find((p) => p.id === Number(node.id()))
+        if (!p) return
+        p.x = node.x()
+        p.y = node.y()
+        p.scaleX = node.scaleX()
+        p.scaleY = node.scaleY()
+        p.rotation = node.rotation()
       })
       node.on('dragstart transformstart', () => {
         if (!isUpdating) emit('push-history')
