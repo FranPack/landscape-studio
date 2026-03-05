@@ -22,12 +22,34 @@ interface Plant {
   rotation: number
 }
 
+interface GroundCover {
+  id: number
+  points: number[] // flat [x1,y1,x2,y2,...] stage coords
+  material: string // 'turf' | 'mulch' | 'gravel' | 'sand' | 'concrete'
+  fill: string // hex color
+  opacity: number
+}
+
 const backgroundImage = ref<string | null>(null)
 const plants = ref<Plant[]>([])
 const selectedId = ref<number | null>(null)
+const selectedCoverId = ref<number | null>(null)
 let nextPlantId = 1
 const fileInput = ref<HTMLInputElement | null>(null)
 const canvasRef = ref<InstanceType<typeof CanvasView> | null>(null)
+const groundCovers = ref<GroundCover[]>([])
+const drawMode = ref(false)
+const selectedMaterial = ref<{ name: string; fill: string }>({ name: 'turf', fill: '#4a7c3f' })
+// eslint-disable-next-line prefer-const, @typescript-eslint/no-unused-vars
+let nextCoverId = 1
+
+const materials = [
+  { name: 'turf', fill: '#4a7c3f' },
+  { name: 'mulch', fill: '#6b3a2a' },
+  { name: 'gravel', fill: '#9e9e9e' },
+  { name: 'sand', fill: '#c2a96e' },
+  { name: 'concrete', fill: '#b0b0b0' },
+]
 
 function triggerPhotoUpload() {
   fileInput.value?.click()
@@ -45,7 +67,7 @@ function onPhotoUpload(e: Event) {
 }
 
 function addPlant(plant: { src: string; name: string }, x?: number, y?: number) {
-  history.push(plants.value)
+  history.push(plants.value, groundCovers.value)
   const center = canvasRef.value?.getCenter() ?? { x: 200, y: 200 }
   plants.value.push({
     id: nextPlantId++,
@@ -60,18 +82,27 @@ function addPlant(plant: { src: string; name: string }, x?: number, y?: number) 
     rotation: 0,
   })
 }
+function addGroundCover(cover: GroundCover) {
+  history.push(plants.value, groundCovers.value)
+  groundCovers.value.push(cover)
+}
 
 function deleteSelected() {
-  if (!selectedId.value) return
-  history.push(plants.value)
-  plants.value = plants.value.filter((p) => p.id !== selectedId.value)
-  selectedId.value = null
+  if (selectedId.value) {
+    history.push(plants.value, groundCovers.value)
+    plants.value = plants.value.filter((p) => p.id !== selectedId.value)
+    selectedId.value = null
+  } else if (selectedCoverId.value) {
+    history.push(plants.value, groundCovers.value)
+    groundCovers.value = groundCovers.value.filter((c) => c.id !== selectedCoverId.value)
+    selectedCoverId.value = null
+  }
 }
 
 function flipSelected() {
   const plant = plants.value.find((p) => p.id === selectedId.value)
   if (!plant) return
-  history.push(plants.value)
+  history.push(plants.value, groundCovers.value)
   plant.scaleX *= -1
 }
 
@@ -109,18 +140,22 @@ function onTouchEnd(e: TouchEvent) {
   drag.endDrag()
 }
 function undo() {
-  const prev = history.undo(plants.value)
+  const prev = history.undo(plants.value, groundCovers.value)
   if (prev) {
-    plants.value = prev
+    plants.value = prev.plants
+    groundCovers.value = prev.groundCovers
     selectedId.value = null
+    selectedCoverId.value = null
   }
 }
 
 function redo() {
-  const next = history.redo(plants.value)
+  const next = history.redo(plants.value, groundCovers.value)
   if (next) {
-    plants.value = next
+    plants.value = next.plants
+    groundCovers.value = next.groundCovers
     selectedId.value = null
+    selectedCoverId.value = null
   }
 }
 function resetZoom() {
@@ -132,7 +167,9 @@ useKeyboard({
   onEscape: () => {
     selectedId.value = null
     canvasRef.value?.clearSelection()
+    canvasRef.value?.cancelDraw()
   },
+
   onUndo: undo,
   onRedo: redo,
   onReset: resetZoom,
@@ -156,20 +193,35 @@ onMounted(() => {
     <Sidebar @plant-selected="addPlant" />
     <main class="canvas-area">
       <Toolbar
-        :has-selection="!!selectedId"
+        :has-selection="!!selectedId || !!selectedCoverId"
         :has-photo="!!backgroundImage"
         @upload-photo="triggerPhotoUpload"
         @delete-selected="deleteSelected"
         @flip-selected="flipSelected"
         @export="exportImage"
         @reset-zoom="resetZoom"
+        :draw-mode="drawMode"
+        :selected-material="selectedMaterial"
+        :materials="materials"
+        @toggle-draw-mode="drawMode = !drawMode"
+        @select-material="selectedMaterial = $event"
       />
       <CanvasView
         ref="canvasRef"
         :background-image="backgroundImage"
         :plants="plants"
         @selection-changed="selectedId = $event"
-        @push-history="history.push(plants)"
+        @push-history="history.push(plants, groundCovers)"
+        :ground-covers="groundCovers"
+        :draw-mode="drawMode"
+        :selected-material="selectedMaterial"
+        :selected-cover-id="selectedCoverId"
+        @add-ground-cover="addGroundCover($event)"
+        @cover-selection-changed="
+          selectedCoverId = $event;
+          selectedId = null;
+          canvasRef?.clearSelection();
+        "
       />
       <input
         ref="fileInput"

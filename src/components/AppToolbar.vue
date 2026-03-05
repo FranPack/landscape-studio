@@ -2,6 +2,9 @@
 defineProps<{
   hasSelection: boolean
   hasPhoto: boolean
+  drawMode: boolean
+  selectedMaterial: { name: string; fill: string }
+  materials: { name: string; fill: string }[]
 }>()
 
 defineEmits<{
@@ -10,6 +13,8 @@ defineEmits<{
   'flip-selected': []
   'reset-zoom': []
   export: []
+  'toggle-draw-mode': []
+  'select-material': [mat: { name: string; fill: string }]
 }>()
 </script>
 
@@ -20,6 +25,17 @@ defineEmits<{
     </div>
     <div class="toolbar-center">
       <button class="btn btn-primary" @click="$emit('upload-photo')">📷 Upload Photo</button>
+      <button class="btn" :class="{ active: drawMode }" @click="$emit('toggle-draw-mode')">✏️ Draw</button>
+      <div v-if="drawMode" class="material-picker">
+        <button
+          v-for="mat in materials"
+          :key="mat.name"
+          :class="{ active: selectedMaterial.name === mat.name }"
+          :style="{ backgroundColor: mat.fill }"
+          @click="$emit('select-material', mat)"
+          :title="mat.name"
+        />
+      </div>
       <button class="btn" @click="$emit('reset-zoom')">⊙ Reset Zoom</button>
 
       <button class="btn" :disabled="!hasSelection" @click="$emit('flip-selected')">↔ Flip</button>
@@ -102,5 +118,29 @@ defineEmits<{
 .btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+.material-picker {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.material-picker button {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.material-picker button.active {
+  border-color: #fff;
+}
+
+button.active {
+  background: #4a4a4a;
+  border: 1px solid #7ec87e;
+  color: #7ec87e;
 }
 </style>

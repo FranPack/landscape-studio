@@ -14,19 +14,34 @@ interface Plant {
   scaleY: number
   rotation: number
 }
+interface GroundCover {
+  id: number
+  points: number[] // flat [x1,y1,x2,y2,...] stage coords
+  material: string // 'turf' | 'mulch' | 'gravel' | 'sand' | 'concrete'
+  fill: string // hex color
+  opacity: number
+}
 
 const props = defineProps<{
   backgroundImage: string | null
   plants: Plant[]
+  drawMode: boolean
+  groundCovers: GroundCover[]
+  selectedMaterial: { name: string; fill: string }
+  selectedCoverId: number | null
 }>()
 
 const emit = defineEmits<{
   'selection-changed': [id: number | null]
   'push-history': []
+  'add-ground-cover': [cover: GroundCover]
+  'cover-selection-changed': [id: number | null]
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLDivElement | null>(null)
+const inProgressPoints = ref<number[]>([])
+const cursorPos = ref<{ x: number; y: number } | null>(null)
 
 let stage: Konva.Stage
 let bgLayer: Konva.Layer
@@ -35,6 +50,7 @@ let transformer: Konva.Transformer
 let isUpdating = false
 let spaceKeyDown: (e: KeyboardEvent) => void
 let spaceKeyUp: (e: KeyboardEvent) => void
+let groundCoverLayer: Konva.Layer
 
 onMounted(() => {
   initStage()
@@ -61,7 +77,6 @@ function initStage() {
   bgLayer = new Konva.Layer()
   plantLayer = new Konva.Layer()
   stage.add(bgLayer)
-  stage.add(plantLayer)
 
   transformer = new Konva.Transformer({
     rotateEnabled: true,
@@ -168,6 +183,39 @@ function initStage() {
     isSpacePanning = false
     if (spaceDown) stage.container().style.cursor = 'grab'
   })
+  groundCoverLayer = new Konva.Layer()
+  stage.add(groundCoverLayer)
+  stage.add(plantLayer) // make sure plantLayer is added AFTER so it's on top
+
+  stage.on('click', () => {
+    if (!props.drawMode) return
+    // if (e.target !== stage) return // only click on empty canvas
+    const pos = stage.getRelativePointerPosition()
+    if (!pos) return
+    inProgressPoints.value.push(pos.x, pos.y)
+  })
+
+  stage.on('dblclick', () => {
+    if (!props.drawMode) return
+    // Remove the 2 extra points added by the preceding click events
+    const pts = inProgressPoints.value.slice(0, -4)
+    if (pts.length < 6) return // need at least 3 points
+    emit('add-ground-cover', {
+      id: Date.now(),
+      points: pts,
+      material: props.selectedMaterial.name,
+      fill: props.selectedMaterial.fill,
+      opacity: 1,
+    })
+    inProgressPoints.value = []
+    cursorPos.value = null
+  })
+
+  stage.on('mousemove', () => {
+    if (!props.drawMode) return
+    const pos = stage.getRelativePointerPosition()
+    if (pos) cursorPos.value = pos
+  })
 }
 
 function onResize() {
@@ -205,6 +253,56 @@ function drawBackground() {
   }
   img.src = props.backgroundImage
 }
+
+watch(() => props.groundCovers, syncGroundCovers, { deep: true })
+watch(() => props.selectedCoverId, () => syncGroundCovers(props.groundCovers))
+
+function syncGroundCovers(covers: GroundCover[]) {
+  if (!groundCoverLayer) return
+  groundCoverLayer.destroyChildren()
+  covers.forEach((cover) => {
+    const shape = new Konva.Line({
+      id: String(cover.id),
+      name: 'cover',
+      points: cover.points,
+      fill: cover.fill,
+      opacity: cover.opacity,
+      closed: true,
+      listening: true,
+      stroke: cover.id === props.selectedCoverId ? '#fff' : 'transparent',
+      strokeWidth: 2,
+    })
+    shape.on('click tap', () => {
+      emit('cover-selection-changed', cover.id)
+    })
+    groundCoverLayer.add(shape)
+  })
+  groundCoverLayer.draw()
+}
+
+watch(
+  [inProgressPoints, cursorPos],
+  () => {
+    if (!groundCoverLayer) return
+    groundCoverLayer.findOne('#preview')?.destroy()
+    if (inProgressPoints.value.length < 2) return
+    const pts = cursorPos.value
+      ? [...inProgressPoints.value, cursorPos.value.x, cursorPos.value.y]
+      : [...inProgressPoints.value]
+    const preview = new Konva.Line({
+      id: 'preview',
+      points: pts,
+      stroke: '#fff',
+      strokeWidth: 1.5,
+      dash: [6, 4],
+      closed: false,
+      listening: false,
+    })
+    groundCoverLayer.add(preview)
+    groundCoverLayer.draw()
+  },
+  { deep: true },
+)
 
 watch(() => props.plants, syncPlants, { deep: true })
 
@@ -350,6 +448,10 @@ defineExpose({
 
   clearSelection,
   resetZoom,
+  cancelDraw: () => {
+    inProgressPoints.value = []
+    cursorPos.value = null
+  },
 })
 </script>
 
