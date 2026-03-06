@@ -42,6 +42,7 @@ const drawMode = ref(false)
 const selectedMaterial = ref<{ name: string; fill: string }>({ name: 'turf', fill: '#4a7c3f' })
 // eslint-disable-next-line prefer-const, @typescript-eslint/no-unused-vars
 let nextCoverId = 1
+const loadInput = ref<HTMLInputElement | null>(null)
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -162,6 +163,48 @@ function resetZoom() {
   canvasRef.value?.resetZoom()
 }
 
+function saveProject() {
+  const data = {
+    version: 1,
+    backgroundImage: backgroundImage.value,
+    plants: plants.value,
+    groundCovers: groundCovers.value,
+  }
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'landscape.landscape'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function loadProject() {
+  loadInput.value?.click()
+}
+
+function onLoadFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target?.result as string)
+      backgroundImage.value = data.backgroundImage ?? null
+      plants.value = data.plants ?? []
+      groundCovers.value = data.groundCovers ?? []
+      nextPlantId = Math.max(0, ...plants.value.map((p: Plant) => p.id)) + 1
+      selectedId.value = null
+      selectedCoverId.value = null
+      history.clear()
+    } catch {
+      console.error('Failed to load project')
+    }
+  }
+  reader.readAsText(file)
+  ;(e.target as HTMLInputElement).value = ''
+}
+
 useKeyboard({
   onDelete: deleteSelected,
   onEscape: () => {
@@ -205,6 +248,8 @@ onMounted(() => {
         :materials="materials"
         @toggle-draw-mode="drawMode = !drawMode"
         @select-material="selectedMaterial = $event"
+        @save="saveProject"
+        @load="loadProject"
       />
       <CanvasView
         ref="canvasRef"
@@ -218,9 +263,9 @@ onMounted(() => {
         :selected-cover-id="selectedCoverId"
         @add-ground-cover="addGroundCover($event)"
         @cover-selection-changed="
-          selectedCoverId = $event;
-          selectedId = null;
-          canvasRef?.clearSelection();
+          selectedCoverId = $event; // prettier-ignore
+          selectedId = null; // prettier-ignore
+          canvasRef?.clearSelection(); // prettier-ignore
         "
       />
       <input
@@ -229,6 +274,13 @@ onMounted(() => {
         accept="image/*"
         style="display: none"
         @change="onPhotoUpload"
+      />
+      <input
+        ref="loadInput"
+        type="file"
+        accept=".landscape"
+        style="display: none"
+        @change="onLoadFile"
       />
     </main>
     <!-- Drag ghost -->

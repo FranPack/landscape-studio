@@ -15,6 +15,8 @@ defineEmits<{
   export: []
   'toggle-draw-mode': []
   'select-material': [mat: { name: string; fill: string }]
+  save: []
+  load: []
 }>()
 </script>
 
@@ -25,7 +27,9 @@ defineEmits<{
     </div>
     <div class="toolbar-center">
       <button class="btn btn-primary" @click="$emit('upload-photo')">📷 Upload Photo</button>
-      <button class="btn" :class="{ active: drawMode }" @click="$emit('toggle-draw-mode')">✏️ Draw</button>
+      <button class="btn" :class="{ active: drawMode }" @click="$emit('toggle-draw-mode')">
+        ✏️ Draw
+      </button>
       <div v-if="drawMode" class="material-picker">
         <button
           v-for="mat in materials"
@@ -44,8 +48,10 @@ defineEmits<{
       </button>
     </div>
     <div class="toolbar-right">
+      <button class="btn" @click="$emit('save')">💾 Save</button>
+      <button class="btn" @click="$emit('load')">📂 Load</button>
       <button class="btn btn-success" :disabled="!hasPhoto" @click="$emit('export')">
-        💾 Export
+        📸 Export
       </button>
     </div>
   </div>

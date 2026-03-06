@@ -46,5 +46,10 @@ export const useHistoryStore = defineStore('history', () => {
     return future.value.pop()!
   }
 
-  return { push, undo, redo }
+  function clear() {
+    past.value = []
+    future.value = []
+  }
+
+  return { push, undo, redo, clear }
 })
