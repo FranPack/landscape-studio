@@ -36,6 +36,7 @@ const emit = defineEmits<{
   'push-history': []
   'add-ground-cover': [cover: GroundCover]
   'cover-selection-changed': [id: number | null]
+  'cover-moved': [payload: { id: number; points: number[] }]
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -255,6 +256,7 @@ function drawBackground() {
 }
 
 watch(() => props.groundCovers, syncGroundCovers, { deep: true })
+watch(() => props.drawMode, () => syncGroundCovers(props.groundCovers))
 watch(() => props.selectedCoverId, () => syncGroundCovers(props.groundCovers))
 
 function syncGroundCovers(covers: GroundCover[]) {
@@ -269,16 +271,23 @@ function syncGroundCovers(covers: GroundCover[]) {
       opacity: cover.opacity,
       closed: true,
       listening: true,
+      draggable: !props.drawMode,
       stroke: cover.id === props.selectedCoverId ? '#fff' : 'transparent',
       strokeWidth: 2,
     })
-    shape.on('click tap', () => {
-      emit('cover-selection-changed', cover.id)
+    shape.on('click tap', () => emit('cover-selection-changed', cover.id))
+    shape.on('dragstart', () => emit('push-history'))
+    shape.on('dragend', () => {
+      const dx = shape.x()
+      const dy = shape.y()
+      const newPoints = cover.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy))
+      emit('cover-moved', { id: cover.id, points: newPoints })
     })
     groundCoverLayer.add(shape)
   })
   groundCoverLayer.draw()
 }
+
 
 watch(
   [inProgressPoints, cursorPos],

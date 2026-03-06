@@ -87,6 +87,10 @@ function addGroundCover(cover: GroundCover) {
   history.push(plants.value, groundCovers.value)
   groundCovers.value.push(cover)
 }
+function onCoverMoved(payload: { id: number; points: number[] }) {
+  const cover = groundCovers.value.find((c) => c.id === payload.id)
+  if (cover) cover.points = payload.points
+}
 
 function deleteSelected() {
   if (selectedId.value) {
@@ -267,6 +271,7 @@ onMounted(() => {
           selectedId = null; // prettier-ignore
           canvasRef?.clearSelection(); // prettier-ignore
         "
+        @cover-moved="onCoverMoved($event)"
       />
       <input
         ref="fileInput"
