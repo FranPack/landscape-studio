@@ -6,6 +6,7 @@ defineProps<{
   selectedMaterial: { name: string; fill: string }
   materials: { name: string; fill: string }[]
   projectName: string
+  selectedCoverOpacity: number | null
 }>()
 
 defineEmits<{
@@ -21,6 +22,8 @@ defineEmits<{
   'bring-forward': []
   'send-back': []
   'update:project-name': [value: string]
+  'opacity-changed': [value: number]
+  'opacity-committed': []
 }>()
 </script>
 
@@ -50,6 +53,19 @@ defineEmits<{
         />
       </div>
       <button class="btn" @click="$emit('reset-zoom')">⊙ Reset Zoom</button>
+      <label v-if="selectedCoverOpacity !== null" class="opacity-slider">
+        <span>Opacity</span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          :value="selectedCoverOpacity"
+          @input="$emit('opacity-changed', +($event.target as HTMLInputElement).value)"
+          @change="$emit('opacity-committed')"
+        />
+      </label>
+
       <button class="btn" :disabled="!hasSelection" @click="$emit('bring-forward')">
         ↑ Forward
       </button>
@@ -175,5 +191,16 @@ button.active {
 .project-name-input:focus {
   border-bottom-color: #7ec87e;
   color: #fff;
+}
+.opacity-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #ccc;
+}
+.opacity-slider input {
+  width: 80px;
+  accent-color: #7ec87e;
 }
 </style>

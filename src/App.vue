@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useDragStore } from '@/stores/dragStore'
 import Sidebar from '@/components/AppSidebar.vue'
 import Toolbar from '@/components/AppToolbar.vue'
@@ -92,6 +92,19 @@ function onCoverMoved(payload: { id: number; points: number[] }) {
   const cover = groundCovers.value.find((c) => c.id === payload.id)
   if (cover) cover.points = payload.points
 }
+const selectedCoverOpacity = computed(() => {
+  if (!selectedCoverId.value) return null
+  return groundCovers.value.find((c) => c.id === selectedCoverId.value)?.opacity ?? null
+})
+
+function setCoverOpacity(value: number) {
+  const cover = groundCovers.value.find((c) => c.id === selectedCoverId.value)
+  if (cover) cover.opacity = value
+}
+
+function commitCoverOpacity() {
+  history.push(plants.value, groundCovers.value)
+}
 
 function bringForward() {
   if (selectedId.value) {
@@ -99,7 +112,9 @@ function bringForward() {
     if (idx < plants.value.length - 1) {
       history.push(plants.value, groundCovers.value)
       const arr = [...plants.value]
-      const tmp = arr[idx]!; arr[idx] = arr[idx + 1]!; arr[idx + 1] = tmp
+      const tmp = arr[idx]!
+      arr[idx] = arr[idx + 1]!
+      arr[idx + 1] = tmp
       plants.value = arr
     }
   } else if (selectedCoverId.value) {
@@ -107,7 +122,9 @@ function bringForward() {
     if (idx < groundCovers.value.length - 1) {
       history.push(plants.value, groundCovers.value)
       const arr = [...groundCovers.value]
-      const tmp = arr[idx]!; arr[idx] = arr[idx + 1]!; arr[idx + 1] = tmp
+      const tmp = arr[idx]!
+      arr[idx] = arr[idx + 1]!
+      arr[idx + 1] = tmp
       groundCovers.value = arr
     }
   }
@@ -119,7 +136,9 @@ function sendBack() {
     if (idx > 0) {
       history.push(plants.value, groundCovers.value)
       const arr = [...plants.value]
-      const tmp = arr[idx]!; arr[idx] = arr[idx - 1]!; arr[idx - 1] = tmp
+      const tmp = arr[idx]!
+      arr[idx] = arr[idx - 1]!
+      arr[idx - 1] = tmp
       plants.value = arr
     }
   } else if (selectedCoverId.value) {
@@ -127,7 +146,9 @@ function sendBack() {
     if (idx > 0) {
       history.push(plants.value, groundCovers.value)
       const arr = [...groundCovers.value]
-      const tmp = arr[idx]!; arr[idx] = arr[idx - 1]!; arr[idx - 1] = tmp
+      const tmp = arr[idx]!
+      arr[idx] = arr[idx - 1]!
+      arr[idx - 1] = tmp
       groundCovers.value = arr
     }
   }
@@ -225,8 +246,6 @@ function saveProject() {
   URL.revokeObjectURL(url)
 }
 
-
-
 function loadProject() {
   loadInput.value?.click()
 }
@@ -303,6 +322,9 @@ onMounted(() => {
         @send-back="sendBack"
         @bring-forward="bringForward"
         @update:project-name="projectName = $event"
+        :selected-cover-opacity="selectedCoverOpacity"
+        @opacity-changed="setCoverOpacity($event)"
+        @opacity-committed="commitCoverOpacity"
       />
       <CanvasView
         ref="canvasRef"

@@ -190,9 +190,28 @@ function initStage() {
 
   stage.on('click', () => {
     if (!props.drawMode) return
-    // if (e.target !== stage) return // only click on empty canvas
     const pos = stage.getRelativePointerPosition()
     if (!pos) return
+
+    // Close polygon if clicking near first vertex (3+ points already placed)
+    if (inProgressPoints.value.length >= 6) {
+      const firstX = inProgressPoints.value[0]!
+      const firstY = inProgressPoints.value[1]!
+      const dist = Math.hypot(pos.x - firstX, pos.y - firstY)
+      if (dist < 12 / stage.scaleX()) {
+        emit('add-ground-cover', {
+          id: Date.now(),
+          points: inProgressPoints.value,
+          material: props.selectedMaterial.name,
+          fill: props.selectedMaterial.fill,
+          opacity: 1,
+        })
+        inProgressPoints.value = []
+        cursorPos.value = null
+        return
+      }
+    }
+
     inProgressPoints.value.push(pos.x, pos.y)
   })
 
@@ -264,6 +283,12 @@ watch(
   () => props.selectedCoverId,
   () => syncGroundCovers(props.groundCovers),
 )
+watch(
+  () => props.drawMode,
+  (val) => {
+    if (stage) stage.container().style.cursor = val ? 'crosshair' : 'default'
+  },
+)
 
 function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
@@ -299,7 +324,25 @@ watch(
   () => {
     if (!groundCoverLayer) return
     groundCoverLayer.findOne('#preview')?.destroy()
+    groundCoverLayer.find('.vertex-dot').forEach((n) => n.destroy())
+
     if (inProgressPoints.value.length < 2) return
+
+    for (let i = 0; i < inProgressPoints.value.length; i += 2) {
+      const isFirst = i === 0
+      const closeable = inProgressPoints.value.length >= 6
+      const dot = new Konva.Circle({
+        x: inProgressPoints.value[i]!,
+        y: inProgressPoints.value[i + 1]!,
+        radius: isFirst && closeable ? 6 : 4,
+        fill: isFirst && closeable ? '#7ec87e' : '#fff',
+        opacity: 0.8,
+        name: 'vertex-dot',
+        listening: false,
+      })
+      groundCoverLayer.add(dot)
+    }
+
     const pts = cursorPos.value
       ? [...inProgressPoints.value, cursorPos.value.x, cursorPos.value.y]
       : [...inProgressPoints.value]
