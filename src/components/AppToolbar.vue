@@ -17,6 +17,8 @@ defineEmits<{
   'select-material': [mat: { name: string; fill: string }]
   save: []
   load: []
+  'bring-forward': []
+  'send-back': []
 }>()
 </script>
 
@@ -41,6 +43,10 @@ defineEmits<{
         />
       </div>
       <button class="btn" @click="$emit('reset-zoom')">⊙ Reset Zoom</button>
+      <button class="btn" :disabled="!hasSelection" @click="$emit('bring-forward')">
+        ↑ Forward
+      </button>
+      <button class="btn" :disabled="!hasSelection" @click="$emit('send-back')">↓ Back</button>
 
       <button class="btn" :disabled="!hasSelection" @click="$emit('flip-selected')">↔ Flip</button>
       <button class="btn btn-danger" :disabled="!hasSelection" @click="$emit('delete-selected')">

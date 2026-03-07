@@ -92,6 +92,46 @@ function onCoverMoved(payload: { id: number; points: number[] }) {
   if (cover) cover.points = payload.points
 }
 
+function bringForward() {
+  if (selectedId.value) {
+    const idx = plants.value.findIndex((p) => p.id === selectedId.value)
+    if (idx < plants.value.length - 1) {
+      history.push(plants.value, groundCovers.value)
+      const arr = [...plants.value]
+      const tmp = arr[idx]!; arr[idx] = arr[idx + 1]!; arr[idx + 1] = tmp
+      plants.value = arr
+    }
+  } else if (selectedCoverId.value) {
+    const idx = groundCovers.value.findIndex((c) => c.id === selectedCoverId.value)
+    if (idx < groundCovers.value.length - 1) {
+      history.push(plants.value, groundCovers.value)
+      const arr = [...groundCovers.value]
+      const tmp = arr[idx]!; arr[idx] = arr[idx + 1]!; arr[idx + 1] = tmp
+      groundCovers.value = arr
+    }
+  }
+}
+
+function sendBack() {
+  if (selectedId.value) {
+    const idx = plants.value.findIndex((p) => p.id === selectedId.value)
+    if (idx > 0) {
+      history.push(plants.value, groundCovers.value)
+      const arr = [...plants.value]
+      const tmp = arr[idx]!; arr[idx] = arr[idx - 1]!; arr[idx - 1] = tmp
+      plants.value = arr
+    }
+  } else if (selectedCoverId.value) {
+    const idx = groundCovers.value.findIndex((c) => c.id === selectedCoverId.value)
+    if (idx > 0) {
+      history.push(plants.value, groundCovers.value)
+      const arr = [...groundCovers.value]
+      const tmp = arr[idx]!; arr[idx] = arr[idx - 1]!; arr[idx - 1] = tmp
+      groundCovers.value = arr
+    }
+  }
+}
+
 function deleteSelected() {
   if (selectedId.value) {
     history.push(plants.value, groundCovers.value)
@@ -254,6 +294,8 @@ onMounted(() => {
         @select-material="selectedMaterial = $event"
         @save="saveProject"
         @load="loadProject"
+        @send-back="sendBack"
+        @bring-forward="bringForward"
       />
       <CanvasView
         ref="canvasRef"

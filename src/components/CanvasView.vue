@@ -256,8 +256,14 @@ function drawBackground() {
 }
 
 watch(() => props.groundCovers, syncGroundCovers, { deep: true })
-watch(() => props.drawMode, () => syncGroundCovers(props.groundCovers))
-watch(() => props.selectedCoverId, () => syncGroundCovers(props.groundCovers))
+watch(
+  () => props.drawMode,
+  () => syncGroundCovers(props.groundCovers),
+)
+watch(
+  () => props.selectedCoverId,
+  () => syncGroundCovers(props.groundCovers),
+)
 
 function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
@@ -287,7 +293,6 @@ function syncGroundCovers(covers: GroundCover[]) {
   })
   groundCoverLayer.draw()
 }
-
 
 watch(
   [inProgressPoints, cursorPos],
@@ -331,7 +336,12 @@ function syncPlants(newPlants: Plant[]) {
       }
     })
 
-  // Update existing plants (handles undo/redo position changes)
+  newPlants.forEach((plant, i) => {
+    const node = plantLayer.findOne(`#${plant.id}`)
+    if (node) node.zIndex(i)
+  })
+  transformer.moveToTop()
+
   isUpdating = true
   newPlants.forEach((plant) => {
     const node = plantLayer.findOne(`#${plant.id}`) as Konva.Image
