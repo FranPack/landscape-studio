@@ -294,6 +294,8 @@ function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
   groundCoverLayer.destroyChildren()
   covers.forEach((cover) => {
+    const group = new Konva.Group({ draggable: !props.drawMode })
+
     const shape = new Konva.Line({
       id: String(cover.id),
       name: 'cover',
@@ -302,22 +304,55 @@ function syncGroundCovers(covers: GroundCover[]) {
       opacity: cover.opacity,
       closed: true,
       listening: true,
-      draggable: !props.drawMode,
       stroke: cover.id === props.selectedCoverId ? '#fff' : 'transparent',
       strokeWidth: 2,
     })
-    shape.on('click tap', () => emit('cover-selection-changed', cover.id))
-    shape.on('dragstart', () => emit('push-history'))
-    shape.on('dragend', () => {
-      const dx = shape.x()
-      const dy = shape.y()
+
+    group.add(shape)
+    group.on('click tap', () => emit('cover-selection-changed', cover.id))
+    group.on('dragstart', () => emit('push-history'))
+    group.on('dragend', () => {
+      const dx = group.x()
+      const dy = group.y()
       const newPoints = cover.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy))
       emit('cover-moved', { id: cover.id, points: newPoints })
     })
-    groundCoverLayer.add(shape)
+    groundCoverLayer.add(group)
+
+    if (cover.id === props.selectedCoverId) {
+      for (let i = 0; i < cover.points.length; i += 2) {
+        const idx = i
+        const handle = new Konva.Circle({
+          x: cover.points[idx]!,
+          y: cover.points[idx + 1]!,
+          radius: 6,
+          fill: '#fff',
+          stroke: '#7ec87e',
+          strokeWidth: 2,
+          draggable: true,
+          name: 'vertex-handle',
+        })
+        handle.on('dragstart', () => emit('push-history'))
+        handle.on('dragmove', () => {
+          const newPoints = [...cover.points]
+          newPoints[idx] = handle.x()
+          newPoints[idx + 1] = handle.y()
+          shape.points(newPoints)
+          groundCoverLayer.draw()
+        })
+        handle.on('dragend', () => {
+          const newPoints = [...cover.points]
+          newPoints[idx] = handle.x()
+          newPoints[idx + 1] = handle.y()
+          emit('cover-moved', { id: cover.id, points: newPoints })
+        })
+        group.add(handle)
+      }
+    }
   })
   groundCoverLayer.draw()
 }
+
 
 watch(
   [inProgressPoints, cursorPos],
