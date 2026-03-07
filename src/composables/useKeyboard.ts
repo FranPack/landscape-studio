@@ -6,6 +6,8 @@ interface Options {
   onUndo: () => void
   onRedo: () => void
   onReset: () => void
+  onDuplicate?: () => void
+  onRemoveVertex?: () => void
 }
 
 export function useKeyboard(options: Options) {
@@ -13,8 +15,16 @@ export function useKeyboard(options: Options) {
     const tag = (e.target as HTMLElement).tagName
     if (tag === 'INPUT' || tag === 'TEXTAREA') return
 
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (e.key === 'Delete') {
       options.onDelete()
+    } else if (e.key === 'Backspace') {
+      if (options.onRemoveVertex) options.onRemoveVertex()
+      else options.onDelete()
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+      e.preventDefault()
+      options.onDuplicate?.()
     }
 
     if (e.key === 'Escape') {

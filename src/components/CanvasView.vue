@@ -507,12 +507,16 @@ defineExpose({
       y: (clientY - rect.top - stage.y()) / scale,
     }
   },
-
   clearSelection,
   resetZoom,
   cancelDraw: () => {
     inProgressPoints.value = []
     cursorPos.value = null
+  },
+  removeLastVertex: () => {
+    if (inProgressPoints.value.length >= 2) {
+      inProgressPoints.value = inProgressPoints.value.slice(0, -2)
+    }
   },
 })
 </script>

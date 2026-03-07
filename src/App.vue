@@ -92,6 +92,20 @@ function onCoverMoved(payload: { id: number; points: number[] }) {
   const cover = groundCovers.value.find((c) => c.id === payload.id)
   if (cover) cover.points = payload.points
 }
+function duplicateSelected() {
+  if (selectedId.value) {
+    const plant = plants.value.find((p) => p.id === selectedId.value)
+    if (!plant) return
+    history.push(plants.value, groundCovers.value)
+    plants.value.push({ ...plant, id: nextPlantId++, x: plant.x + 20, y: plant.y + 20 })
+  } else if (selectedCoverId.value) {
+    const cover = groundCovers.value.find((c) => c.id === selectedCoverId.value)
+    if (!cover) return
+    history.push(plants.value, groundCovers.value)
+    groundCovers.value.push({ ...cover, id: Date.now(), points: cover.points.map((v) => v + 20) })
+  }
+}
+
 const selectedCoverOpacity = computed(() => {
   if (!selectedCoverId.value) return null
   return groundCovers.value.find((c) => c.id === selectedCoverId.value)?.opacity ?? null
@@ -277,6 +291,7 @@ useKeyboard({
   onDelete: deleteSelected,
   onEscape: () => {
     selectedId.value = null
+    selectedCoverId.value = null
     canvasRef.value?.clearSelection()
     canvasRef.value?.cancelDraw()
   },
@@ -284,6 +299,11 @@ useKeyboard({
   onUndo: undo,
   onRedo: redo,
   onReset: resetZoom,
+  onDuplicate: duplicateSelected,
+  onRemoveVertex: () => {
+    if (drawMode.value) canvasRef.value?.removeLastVertex()
+    else deleteSelected()
+  },
 })
 onMounted(() => {
   if (import.meta.env.DEV) {
