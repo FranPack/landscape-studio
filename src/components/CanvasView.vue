@@ -293,17 +293,64 @@ watch(
   },
 )
 
+function createPatternCanvas(material: string, fill: string): HTMLCanvasElement {
+  const size = 20
+  const c = document.createElement('canvas')
+  c.width = size
+  c.height = size
+  const ctx = c.getContext('2d')!
+
+  ctx.fillStyle = fill
+  ctx.fillRect(0, 0, size, size)
+
+  if (material === 'mulch') {
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(0, 10)
+    ctx.lineTo(10, 0)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(10, 20)
+    ctx.lineTo(20, 10)
+    ctx.stroke()
+  } else if (material === 'gravel' || material === 'sand') {
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'
+    const dots = [
+      [4, 4],
+      [14, 8],
+      [8, 16],
+      [2, 14],
+      [17, 3],
+    ]
+    for (const [x, y] of dots) {
+      ctx.beginPath()
+      ctx.arc(x!, y!, 1, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  } else if (material === 'concrete') {
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)'
+    ctx.lineWidth = 1
+    ctx.strokeRect(0, 0, size, size)
+  }
+
+  return c
+}
+
 function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
   groundCoverLayer.destroyChildren()
   covers.forEach((cover) => {
     const group = new Konva.Group({ draggable: !props.drawMode })
 
+    const patternCanvas = createPatternCanvas(cover.material, cover.fill)
+
     const shape = new Konva.Line({
       id: String(cover.id),
       name: 'cover',
       points: cover.points,
-      fill: cover.fill,
+      fillPatternImage: patternCanvas as unknown as HTMLImageElement,
+      fillPatternRepeat: 'repeat',
       opacity: cover.opacity,
       closed: true,
       listening: true,
@@ -631,5 +678,4 @@ defineExpose({
   color: #fff;
   text-shadow: 0 1px 3px #000;
 }
-
 </style>
