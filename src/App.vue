@@ -44,6 +44,7 @@ const selectedMaterial = ref<{ name: string; fill: string }>({ name: 'turf', fil
 let nextCoverId = 1
 const loadInput = ref<HTMLInputElement | null>(null)
 const projectName = ref('my-landscape')
+const scaleFeetPer100px = ref<number | null>(null)
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -345,6 +346,8 @@ onMounted(() => {
         :selected-cover-opacity="selectedCoverOpacity"
         @opacity-changed="setCoverOpacity($event)"
         @opacity-committed="commitCoverOpacity"
+        :scale-feet-per100px="scaleFeetPer100px"
+        @update:scale-feet-per100px="scaleFeetPer100px = $event"
       />
       <CanvasView
         ref="canvasRef"
@@ -363,6 +366,7 @@ onMounted(() => {
           canvasRef?.clearSelection(); // prettier-ignore
         "
         @cover-moved="onCoverMoved($event)"
+        :scale-feet-per100px="scaleFeetPer100px"
       />
       <input
         ref="fileInput"

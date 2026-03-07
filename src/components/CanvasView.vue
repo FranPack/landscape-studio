@@ -29,6 +29,7 @@ const props = defineProps<{
   groundCovers: GroundCover[]
   selectedMaterial: { name: string; fill: string }
   selectedCoverId: number | null
+  scaleFeetPer100px: number | null
 }>()
 
 const emit = defineEmits<{
@@ -43,6 +44,7 @@ const wrapperRef = ref<HTMLDivElement | null>(null)
 const canvasEl = ref<HTMLDivElement | null>(null)
 const inProgressPoints = ref<number[]>([])
 const cursorPos = ref<{ x: number; y: number } | null>(null)
+const stageScale = ref(1)
 
 let stage: Konva.Stage
 let bgLayer: Konva.Layer
@@ -110,6 +112,7 @@ function initStage() {
     const clamped = Math.max(0.2, Math.min(5, newScale))
 
     stage.scale({ x: clamped, y: clamped })
+    stageScale.value = clamped
     stage.position({
       x: pointer.x - mousePointTo.x * clamped,
       y: pointer.y - mousePointTo.y * clamped,
@@ -353,7 +356,6 @@ function syncGroundCovers(covers: GroundCover[]) {
   groundCoverLayer.draw()
 }
 
-
 watch(
   [inProgressPoints, cursorPos],
   () => {
@@ -519,6 +521,7 @@ function clearSelection() {
 function resetZoom() {
   stage.scale({ x: 1, y: 1 })
   stage.position({ x: 0, y: 0 })
+  stageScale.value = 1
 }
 
 defineExpose({
@@ -558,6 +561,11 @@ defineExpose({
 
 <template>
   <div class="canvas-wrapper" ref="wrapperRef">
+    <div v-if="scaleFeetPer100px && backgroundImage" class="scale-bar">
+      <div class="scale-bar-line" />
+      <span>{{ (scaleFeetPer100px / stageScale).toFixed(1) }} ft</span>
+    </div>
+
     <div v-if="!backgroundImage" class="empty-state">
       <div class="empty-icon">🌿</div>
       <p>Upload a photo of your yard to get started</p>
@@ -599,4 +607,29 @@ defineExpose({
   font-size: 13px;
   color: #444;
 }
+.scale-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+.scale-bar-line {
+  width: 100px;
+  height: 4px;
+  background: #fff;
+  border-left: 2px solid #fff;
+  border-right: 2px solid #fff;
+  border-top: none;
+}
+.scale-bar span {
+  font-size: 12px;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+}
+
 </style>

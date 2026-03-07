@@ -7,6 +7,7 @@ defineProps<{
   materials: { name: string; fill: string }[]
   projectName: string
   selectedCoverOpacity: number | null
+  scaleFeetPer100px: number | null
 }>()
 
 defineEmits<{
@@ -24,6 +25,7 @@ defineEmits<{
   'update:project-name': [value: string]
   'opacity-changed': [value: number]
   'opacity-committed': []
+  'update:scale-feet-per100px': [value: number | null]
 }>()
 </script>
 
@@ -77,6 +79,24 @@ defineEmits<{
       </button>
     </div>
     <div class="toolbar-right">
+      <label class="scale-input">
+        <span>Scale</span>
+        <input
+          type="number"
+          min="0"
+          placeholder="ft/100px"
+          :value="scaleFeetPer100px ?? ''"
+          @change="
+            $emit(
+              'update:scale-feet-per100px',
+              ($event.target as HTMLInputElement).value
+                ? +($event.target as HTMLInputElement).value
+                : null,
+            )
+          "
+        />
+      </label>
+
       <button class="btn" @click="$emit('save')">💾 Save</button>
       <button class="btn" @click="$emit('load')">📂 Load</button>
       <button class="btn btn-success" :disabled="!hasPhoto" @click="$emit('export')">
@@ -203,4 +223,21 @@ button.active {
   width: 80px;
   accent-color: #7ec87e;
 }
+.scale-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #ccc;
+}
+.scale-input input {
+  width: 70px;
+  background: #2a2a2a;
+  border: 1px solid #4a4a4a;
+  border-radius: 4px;
+  color: #fff;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
 </style>
