@@ -5,6 +5,7 @@ defineProps<{
   drawMode: boolean
   selectedMaterial: { name: string; fill: string }
   materials: { name: string; fill: string }[]
+  projectName: string
 }>()
 
 defineEmits<{
@@ -19,6 +20,7 @@ defineEmits<{
   load: []
   'bring-forward': []
   'send-back': []
+  'update:project-name': [value: string]
 }>()
 </script>
 
@@ -26,6 +28,11 @@ defineEmits<{
   <div class="toolbar">
     <div class="toolbar-left">
       <span class="app-name">🌿 Landscape Studio</span>
+      <input
+        class="project-name-input"
+        :value="projectName"
+        @input="$emit('update:project-name', ($event.target as HTMLInputElement).value)"
+      />
     </div>
     <div class="toolbar-center">
       <button class="btn btn-primary" @click="$emit('upload-photo')">📷 Upload Photo</button>
@@ -154,5 +161,19 @@ button.active {
   background: #4a4a4a;
   border: 1px solid #7ec87e;
   color: #7ec87e;
+}
+.project-name-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #444;
+  color: #aaa;
+  font-size: 13px;
+  padding: 2px 4px;
+  width: 140px;
+  outline: none;
+}
+.project-name-input:focus {
+  border-bottom-color: #7ec87e;
+  color: #fff;
 }
 </style>

@@ -43,6 +43,7 @@ const selectedMaterial = ref<{ name: string; fill: string }>({ name: 'turf', fil
 // eslint-disable-next-line prefer-const, @typescript-eslint/no-unused-vars
 let nextCoverId = 1
 const loadInput = ref<HTMLInputElement | null>(null)
+const projectName = ref('my-landscape')
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -210,6 +211,7 @@ function resetZoom() {
 function saveProject() {
   const data = {
     version: 1,
+    projectName: projectName.value,
     backgroundImage: backgroundImage.value,
     plants: plants.value,
     groundCovers: groundCovers.value,
@@ -218,10 +220,12 @@ function saveProject() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'landscape.landscape'
+  a.download = `${projectName.value}.landscape`
   a.click()
   URL.revokeObjectURL(url)
 }
+
+
 
 function loadProject() {
   loadInput.value?.click()
@@ -234,6 +238,7 @@ function onLoadFile(e: Event) {
   reader.onload = (ev) => {
     try {
       const data = JSON.parse(ev.target?.result as string)
+      projectName.value = data.projectName ?? 'my-landscape'
       backgroundImage.value = data.backgroundImage ?? null
       plants.value = data.plants ?? []
       groundCovers.value = data.groundCovers ?? []
@@ -290,12 +295,14 @@ onMounted(() => {
         :draw-mode="drawMode"
         :selected-material="selectedMaterial"
         :materials="materials"
+        :project-name="projectName"
         @toggle-draw-mode="drawMode = !drawMode"
         @select-material="selectedMaterial = $event"
         @save="saveProject"
         @load="loadProject"
         @send-back="sendBack"
         @bring-forward="bringForward"
+        @update:project-name="projectName = $event"
       />
       <CanvasView
         ref="canvasRef"
