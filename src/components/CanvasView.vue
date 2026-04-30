@@ -30,6 +30,7 @@ const props = defineProps<{
   selectedMaterial: { name: string; fill: string }
   selectedCoverId: number | null
   scaleFeetPer100px: number | null
+  disableZoom: boolean
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +39,9 @@ const emit = defineEmits<{
   'add-ground-cover': [cover: GroundCover]
   'cover-selection-changed': [id: number | null]
   'cover-moved': [payload: { id: number; points: number[] }]
+  'context-menu': [
+    payload: { x: number; y: number; targetType: 'plant' | 'cover'; targetId: number },
+  ]
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -67,7 +71,6 @@ onUnmounted(() => {
   window.removeEventListener('keyup', spaceKeyUp)
   stage?.destroy()
 })
-
 function initStage() {
   const { width, height } = wrapperRef.value!.getBoundingClientRect()
 
@@ -98,6 +101,7 @@ function initStage() {
   })
   stage.on('wheel', (e) => {
     e.evt.preventDefault()
+    if (props.disableZoom) return
 
     const scaleBy = 1.05
     const oldScale = stage.scaleX()
@@ -122,6 +126,7 @@ function initStage() {
   let panStart = { x: 0, y: 0 }
 
   stage.on('mousedown', (e) => {
+    if (props.disableZoom) return
     if (e.evt.button !== 1) return // middle button only
     e.evt.preventDefault()
     isPanning = true
@@ -145,6 +150,7 @@ function initStage() {
   let spaceDown = false
 
   spaceKeyDown = (e) => {
+    if (props.disableZoom) return
     if (e.code === 'Space' && !spaceDown) {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
@@ -155,6 +161,7 @@ function initStage() {
 
   spaceKeyUp = (e) => {
     if (e.code === 'Space') {
+      if (props.disableZoom) return
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       spaceDown = false
@@ -167,6 +174,7 @@ function initStage() {
   window.addEventListener('keyup', spaceKeyUp)
 
   stage.on('mousedown', (e) => {
+    if (props.disableZoom) return
     if (e.evt.button === 0 && spaceDown) {
       isSpacePanning = true
       panStart = { x: e.evt.clientX - stage.x(), y: e.evt.clientY - stage.y() }
@@ -292,6 +300,11 @@ watch(
     if (stage) stage.container().style.cursor = val ? 'crosshair' : 'default'
   },
 )
+watch(() => props.disableZoom, (val) => {
+  if (transformer) transformer.listening(!val)
+  syncPlants(props.plants)
+  syncGroundCovers(props.groundCovers)
+})
 
 function createPatternCanvas(material: string, fill: string): HTMLCanvasElement {
   const size = 20
@@ -341,7 +354,7 @@ function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
   groundCoverLayer.destroyChildren()
   covers.forEach((cover) => {
-    const group = new Konva.Group({ draggable: !props.drawMode })
+    const group = new Konva.Group({ draggable: !props.drawMode && !props.disableZoom })
 
     const patternCanvas = createPatternCanvas(cover.material, cover.fill)
 
@@ -360,6 +373,16 @@ function syncGroundCovers(covers: GroundCover[]) {
 
     group.add(shape)
     group.on('click tap', () => emit('cover-selection-changed', cover.id))
+    group.on('contextmenu', (e) => {
+      e.evt.preventDefault()
+      emit('cover-selection-changed', cover.id)
+      emit('context-menu', {
+        x: e.evt.clientX,
+        y: e.evt.clientY,
+        targetType: 'cover',
+        targetId: cover.id,
+      })
+    })
     group.on('dragstart', () => emit('push-history'))
     group.on('dragend', () => {
       const dx = group.x()
@@ -473,6 +496,7 @@ function syncPlants(newPlants: Plant[]) {
   newPlants.forEach((plant) => {
     const node = plantLayer.findOne(`#${plant.id}`) as Konva.Image
     if (!node) return
+    node.draggable(!props.disableZoom)
     node.x(plant.x)
     node.y(plant.y)
     node.scaleX(plant.scaleX)
@@ -500,7 +524,7 @@ function syncPlants(newPlants: Plant[]) {
         scaleX: plant.scaleX,
         scaleY: plant.scaleY,
         rotation: plant.rotation,
-        draggable: true,
+        draggable: !props.disableZoom,
         offsetX: plant.width / 2,
         offsetY: plant.height / 2,
       })
@@ -510,7 +534,17 @@ function syncPlants(newPlants: Plant[]) {
         emit('selection-changed', plant.id)
         plantLayer.draw()
       })
-
+      node.on('contextmenu', (e) => {
+        e.evt.preventDefault()
+        transformer.nodes([node])
+        emit('selection-changed', plant.id)
+        emit('context-menu', {
+          x: e.evt.clientX,
+          y: e.evt.clientY,
+          targetType: 'plant',
+          targetId: plant.id,
+        })
+      })
       node.on('transformend dragend', () => {
         const p = props.plants.find((p) => p.id === Number(node.id()))
         if (!p) return

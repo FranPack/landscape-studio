@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useDragStore } from '@/stores/dragStore'
 import Sidebar from '@/components/AppSidebar.vue'
 import Toolbar from '@/components/AppToolbar.vue'
@@ -45,6 +45,8 @@ let nextCoverId = 1
 const loadInput = ref<HTMLInputElement | null>(null)
 const projectName = ref('my-landscape')
 const scaleFeetPer100px = ref<number | null>(null)
+const contextMenu = ref<{ x: number; y: number } | null>(null)
+const contextMenuRef = ref<HTMLDivElement | null>(null)
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -57,7 +59,43 @@ const materials = [
 function triggerPhotoUpload() {
   fileInput.value?.click()
 }
+function onContextMenu(payload: {
+  x: number
+  y: number
+  targetType: 'plant' | 'cover'
+  targetId: number
+}) {
+  if (payload.targetType === 'plant') {
+    selectedId.value = payload.targetId
+    selectedCoverId.value = null
+  } else {
+    selectedCoverId.value = payload.targetId
+    selectedId.value = null
+  }
+  contextMenu.value = { x: payload.x, y: payload.y }
+}
 
+function closeContextMenu() {
+  contextMenu.value = null
+}
+function onWindowClick(e: MouseEvent) {
+  if (contextMenuRef.value && !contextMenuRef.value.contains(e.target as Node)) {
+    closeContextMenu()
+  }
+}
+watch(contextMenu, (val) => {
+  if (val) {
+    window.addEventListener('click', onWindowClick)
+    window.addEventListener('wheel', onWheel, { passive: false })
+  } else {
+    window.removeEventListener('click', onWindowClick)
+    window.removeEventListener('wheel', onWheel)
+  }
+})
+
+function onWheel(e: WheelEvent) {
+  e.preventDefault()
+}
 function onPhotoUpload(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -367,6 +405,8 @@ onMounted(() => {
         "
         @cover-moved="onCoverMoved($event)"
         :scale-feet-per100px="scaleFeetPer100px"
+        @context-menu="onContextMenu"
+        :disable-zoom="!!contextMenu"
       />
       <input
         ref="fileInput"
@@ -382,6 +422,46 @@ onMounted(() => {
         style="display: none"
         @change="onLoadFile"
       />
+      <div
+        ref="contextMenuRef"
+        v-if="contextMenu"
+        class="context-menu"
+        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+      >
+        <button
+          @click="
+            duplicateSelected();
+            closeContextMenu()
+          "
+        >
+          Duplicate
+        </button>
+        <button
+          @click="
+            bringForward();
+            closeContextMenu()
+          "
+        >
+          Bring Forward
+        </button>
+        <button
+          @click="
+            sendBack();
+            closeContextMenu()
+          "
+        >
+          Send Back
+        </button>
+        <button
+          class="danger"
+          @click="
+            deleteSelected();
+            closeContextMenu()
+          "
+        >
+          Delete
+        </button>
+      </div>
     </main>
     <!-- Drag ghost -->
     <div
@@ -435,5 +515,38 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+.context-menu {
+  position: fixed;
+  background: #1e1e1e;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  padding: 4px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.context-menu button {
+  background: none;
+  border: none;
+  color: #eee;
+  padding: 8px 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.context-menu button:hover {
+  background: #2a2a2a;
+}
+.context-menu button.danger {
+  color: #e57373;
+}
+.context-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
 }
 </style>
