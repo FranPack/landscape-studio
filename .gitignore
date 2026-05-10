@@ -37,3 +37,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+color-swatch-light.html
+color-swatch.html
+preview.html
+/.claude
+/.claude

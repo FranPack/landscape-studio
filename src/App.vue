@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useDragStore } from '@/stores/dragStore'
-import Sidebar from '@/components/AppSidebar.vue'
-import Toolbar from '@/components/AppToolbar.vue'
 import CanvasView from '@/components/CanvasView.vue'
 import { useHistoryStore } from '@/stores/historyStore'
 import { useKeyboard } from '@/composables/useKeyboard'
-
-const history = useHistoryStore()
+import PropertyBar from './components/PropertyBar.vue'
+import ToolStrip from './components/ToolStrip.vue'
+import PlantLibrary from './components/PlantLibrary.vue'
+import StatusBar from './components/StatusBar.vue'
+import TitleBar from './components/TitleBar.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 
 interface Plant {
   id: number
@@ -30,6 +32,10 @@ interface GroundCover {
   opacity: number
 }
 
+const history = useHistoryStore()
+const isElectron = navigator.userAgent.includes('Electron')
+const stageZoom = ref(1)
+const theme = ref<'dark' | 'light'>('dark')
 const backgroundImage = ref<string | null>(null)
 const plants = ref<Plant[]>([])
 const selectedId = ref<number | null>(null)
@@ -47,6 +53,7 @@ const projectName = ref('my-landscape')
 const scaleFeetPer100px = ref<number | null>(null)
 const contextMenu = ref<{ x: number; y: number } | null>(null)
 const contextMenuRef = ref<HTMLDivElement | null>(null)
+const showSettings = ref(false)
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -55,6 +62,18 @@ const materials = [
   { name: 'sand', fill: '#c2a96e' },
   { name: 'concrete', fill: '#b0b0b0' },
 ]
+
+function toggleTheme() {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  document.documentElement.classList.toggle('light', theme.value === 'light')
+}
+
+function flipSelectedV() {
+  const plant = plants.value.find((p) => p.id === selectedId.value)
+  if (!plant) return
+  history.push(plants.value, groundCovers.value)
+  plant.scaleY *= -1
+}
 
 function triggerPhotoUpload() {
   fileInput.value?.click()
@@ -345,9 +364,7 @@ useKeyboard({
   },
 })
 onMounted(() => {
-  if (import.meta.env.DEV) {
-    backgroundImage.value = '/default.png'
-  }
+  if (import.meta.env.DEV) backgroundImage.value = '/default.png'
 })
 </script>
 
@@ -360,109 +377,106 @@ onMounted(() => {
     @touchend="onTouchEnd"
     @dragstart.prevent
   >
-    <Sidebar @plant-selected="addPlant" />
-    <main class="canvas-area">
-      <Toolbar
-        :has-selection="!!selectedId || !!selectedCoverId"
-        :has-photo="!!backgroundImage"
-        @upload-photo="triggerPhotoUpload"
-        @delete-selected="deleteSelected"
-        @flip-selected="flipSelected"
-        @export="exportImage"
-        @reset-zoom="resetZoom"
-        :draw-mode="drawMode"
-        :selected-material="selectedMaterial"
-        :materials="materials"
-        :project-name="projectName"
-        @toggle-draw-mode="drawMode = !drawMode"
-        @select-material="selectedMaterial = $event"
-        @save="saveProject"
-        @load="loadProject"
-        @send-back="sendBack"
-        @bring-forward="bringForward"
-        @update:project-name="projectName = $event"
-        :selected-cover-opacity="selectedCoverOpacity"
-        @opacity-changed="setCoverOpacity($event)"
-        @opacity-committed="commitCoverOpacity"
-        :scale-feet-per100px="scaleFeetPer100px"
-        @update:scale-feet-per100px="scaleFeetPer100px = $event"
-      />
+    <TitleBar
+      @save="saveProject"
+      @load="loadProject"
+      @export="exportImage"
+      @undo="undo"
+      @redo="redo"
+      @upload-photo="triggerPhotoUpload"
+      @duplicate="duplicateSelected"
+      @delete="deleteSelected"
+      @reset-zoom="resetZoom"
+      @open-settings="showSettings = true"
+    />
+    <!-- prettier-ignore -->
+    <PropertyBar
+      :selected-id="selectedId"
+      :selected-cover-id="selectedCoverId"
+      :selected-cover-opacity="selectedCoverOpacity"
+      :project-name="projectName"
+      :draw-mode="drawMode"
+      @delete="deleteSelected"
+      @flip-h="flipSelected"
+      @flip-v="flipSelectedV"
+      @duplicate="duplicateSelected"
+      @bring-forward="bringForward"
+      @send-back="sendBack"
+      @opacity-changed="setCoverOpacity($event)"
+      @opacity-committed="commitCoverOpacity"
+      @update:project-name="projectName = $event"
+      @cancel-draw="drawMode = false; canvasRef?.cancelDraw()"
+    />
+    <div class="workspace">
+      <ToolStrip :draw-mode="drawMode" @toggle-draw-mode="drawMode = !drawMode" />
+      <!-- prettier-ignore -->
       <CanvasView
         ref="canvasRef"
         :background-image="backgroundImage"
         :plants="plants"
-        @selection-changed="selectedId = $event"
-        @push-history="history.push(plants, groundCovers)"
         :ground-covers="groundCovers"
         :draw-mode="drawMode"
         :selected-material="selectedMaterial"
         :selected-cover-id="selectedCoverId"
-        @add-ground-cover="addGroundCover($event)"
-        @cover-selection-changed="
-          selectedCoverId = $event; // prettier-ignore
-          selectedId = null; // prettier-ignore
-          canvasRef?.clearSelection(); // prettier-ignore
-        "
-        @cover-moved="onCoverMoved($event)"
         :scale-feet-per100px="scaleFeetPer100px"
-        @context-menu="onContextMenu"
         :disable-zoom="!!contextMenu"
+        @selection-changed="selectedId = $event"
+        @push-history="history.push(plants, groundCovers)"
+        @add-ground-cover="addGroundCover($event)"
+        @cover-selection-changed="selectedCoverId = $event; selectedId = null; canvasRef?.clearSelection()"
+        @cover-moved="onCoverMoved($event)"
+        @context-menu="onContextMenu"
       />
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        style="display: none"
-        @change="onPhotoUpload"
+      <PlantLibrary
+        :materials="materials"
+        :selected-material="selectedMaterial"
+        @plant-selected="addPlant"
+        @select-material="selectedMaterial = $event"
       />
-      <input
-        ref="loadInput"
-        type="file"
-        accept=".landscape"
-        style="display: none"
-        @change="onLoadFile"
-      />
-      <div
-        ref="contextMenuRef"
-        v-if="contextMenu"
-        class="context-menu"
-        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
-      >
-        <button
-          @click="
-            duplicateSelected();
-            closeContextMenu()
-          "
-        >
-          Duplicate
-        </button>
-        <button
-          @click="
-            bringForward();
-            closeContextMenu()
-          "
-        >
-          Bring Forward
-        </button>
-        <button
-          @click="
-            sendBack();
-            closeContextMenu()
-          "
-        >
-          Send Back
-        </button>
-        <button
-          class="danger"
-          @click="
-            deleteSelected();
-            closeContextMenu()
-          "
-        >
-          Delete
-        </button>
-      </div>
-    </main>
+    </div>
+    <StatusBar
+      :zoom="stageZoom"
+      :active-tool="drawMode ? 'Draw' : 'Select'"
+      @toggle-theme="toggleTheme"
+    />
+
+    <!-- Hidden inputs -->
+    <input
+      ref="fileInput"
+      type="file"
+      accept="image/*"
+      style="display: none"
+      @change="onPhotoUpload"
+    />
+    <input
+      ref="loadInput"
+      type="file"
+      accept=".landscape"
+      style="display: none"
+      @change="onLoadFile"
+    />
+
+    <!-- Context menu -->
+    <div
+      ref="contextMenuRef"
+      v-if="contextMenu"
+      class="context-menu"
+      :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+    >
+      <button @click.stop="(duplicateSelected(), closeContextMenu())">Duplicate</button>
+      <button @click.stop="(bringForward(), closeContextMenu())">Bring Forward</button>
+      <button @click.stop="(sendBack(), closeContextMenu())">Send Back</button>
+      <button class="danger" @click.stop="(deleteSelected(), closeContextMenu())">Delete</button>
+    </div>
+
+    <SettingsModal
+      v-if="showSettings"
+      :theme="theme"
+      :scale-feet-per100px="scaleFeetPer100px"
+      @close="showSettings = false"
+      @toggle-theme="toggleTheme"
+      @update:scale-feet-per100px="scaleFeetPer100px = $event"
+    />
     <!-- Drag ghost -->
     <div
       v-if="drag.dragging"
@@ -475,30 +489,17 @@ onMounted(() => {
 </template>
 
 <style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #1a1a1a;
-  color: #fff;
-  height: 100vh;
-  overflow: hidden;
-}
-
 .app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
+  background: var(--bg-base);
   user-select: none;
+  overflow: hidden;
 }
-
-.canvas-area {
+.workspace {
   flex: 1;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
 }
 .drag-ghost {
@@ -510,7 +511,6 @@ body {
   opacity: 0.85;
   z-index: 1000;
 }
-
 .drag-ghost img {
   width: 100%;
   height: 100%;
@@ -518,8 +518,8 @@ body {
 }
 .context-menu {
   position: fixed;
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px;
   z-index: 1000;
@@ -531,22 +531,18 @@ body {
 .context-menu button {
   background: none;
   border: none;
-  color: #eee;
+  color: var(--text-primary);
   padding: 8px 12px;
   text-align: left;
   cursor: pointer;
   border-radius: 4px;
   font-size: 13px;
+  font-family: inherit;
 }
 .context-menu button:hover {
-  background: #2a2a2a;
+  background: var(--hover);
 }
 .context-menu button.danger {
-  color: #e57373;
-}
-.context-menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 999;
+  color: var(--danger);
 }
 </style>
