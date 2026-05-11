@@ -4,7 +4,6 @@ import { ref } from 'vue'
 const platform = (window as any).electronAPI?.platform ?? 'web'
 const openMenu = ref<string | null>(null)
 const openSubmenu = ref<string | null>(null)
-const isWindows = platform === 'win32' || platform === 'linux'
 const isMaximized = ref(false)
 ;(window as any).electronAPI?.onWindowState((state: string) => {
   isMaximized.value = state === 'maximized'
@@ -23,6 +22,7 @@ const isElectron = !!(window as any).electronAPI
 defineProps<{
   showGrid: boolean
   dimBackground: boolean
+  snapToGrid: boolean
 }>()
 
 const emit = defineEmits<{
@@ -39,6 +39,7 @@ const emit = defineEmits<{
   'open-canvas-settings': []
   'toggle-grid': []
   'toggle-dim-bg': []
+  'toggle-snap': []
 }>()
 
 function toggleMenu(name: string) {
@@ -160,6 +161,11 @@ window.addEventListener('click', onWindowClick)
           <div class="dd-item" @click="fire('toggle-dim-bg')">
             <span
               ><span class="check">{{ dimBackground ? '✓' : '' }}</span> Dim Background</span
+            >
+          </div>
+          <div class="dd-item" @click="fire('toggle-snap')">
+            <span
+              ><span class="check">{{ snapToGrid ? '✓' : '' }}</span> Snap to Grid</span
             >
           </div>
           <div class="dd-sep" />

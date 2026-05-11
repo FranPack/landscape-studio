@@ -33,6 +33,7 @@ const props = defineProps<{
   disableZoom: boolean
   showGrid: boolean
   dimBackground: boolean
+  snapToGrid: boolean
 }>()
 
 const emit = defineEmits<{
@@ -277,14 +278,8 @@ function drawGrid() {
   // Determine spacing
   let minorSpacing: number
   let majorSpacing: number
-  if (props.scaleFeetPer100px && props.scaleFeetPer100px > 0) {
-    const stagePxPerUnit = 100 / props.scaleFeetPer100px // 1 unit in stage px
-    minorSpacing = stagePxPerUnit         // 1 unit
-    majorSpacing = stagePxPerUnit * 10    // 10 units
-  } else {
-    minorSpacing = 40
-    majorSpacing = 200
-  }
+  minorSpacing = getMinorSpacing()
+  majorSpacing = minorSpacing * 10
 
   const minorVisible = minorSpacing * scale > 4 // hide minor when too dense
 
@@ -294,9 +289,14 @@ function drawGrid() {
   const bottom = top + h / scale
 
   const addLine = (points: number[], stroke: string) => {
-    gridLayer.add(new Konva.Line({
-      points, stroke, strokeWidth: 1 / scale, listening: false,
-    }))
+    gridLayer.add(
+      new Konva.Line({
+        points,
+        stroke,
+        strokeWidth: 1 / scale,
+        listening: false,
+      }),
+    )
   }
 
   if (minorVisible) {
@@ -471,6 +471,12 @@ function syncGroundCovers(covers: GroundCover[]) {
       const newPoints = cover.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy))
       emit('cover-moved', { id: cover.id, points: newPoints })
     })
+    group.on('dragmove', () => {
+      if (!props.snapToGrid) return
+      const s = getMinorSpacing()
+      group.x(Math.round(group.x() / s) * s)
+      group.y(Math.round(group.y() / s) * s)
+    })
     groundCoverLayer.add(group)
 
     if (cover.id === props.selectedCoverId) {
@@ -638,6 +644,12 @@ function syncPlants(newPlants: Plant[]) {
       node.on('dragstart transformstart', () => {
         if (!isUpdating) emit('push-history')
       })
+      node.on('dragmove', () => {
+        if (!props.snapToGrid) return
+        const s = getMinorSpacing()
+        node.x(Math.round(node.x() / s) * s)
+        node.y(Math.round(node.y() / s) * s)
+      })
       plantLayer.add(node)
       transformer.moveToTop()
       plantLayer.draw()
@@ -686,7 +698,12 @@ function resetZoom() {
   stageScale.value = 1
   drawGrid()
 }
-
+function getMinorSpacing(): number {
+  if (props.scaleFeetPer100px && props.scaleFeetPer100px > 0) {
+    return 100 / props.scaleFeetPer100px
+  }
+  return 40
+}
 defineExpose({
   exportImage,
   getCenter: () => {

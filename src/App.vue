@@ -59,6 +59,7 @@ const showCanvasSettings = ref(false)
 const units = ref<'ft' | 'm'>('ft')
 const showGrid = ref(localStorage.getItem('showGrid') === 'true')
 const dimBackground = ref(localStorage.getItem('dimBackground') === 'true')
+const snapToGrid = ref(localStorage.getItem('snapToGrid') === 'true')
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -360,6 +361,10 @@ function toggleDimBackground() {
   dimBackground.value = !dimBackground.value
   localStorage.setItem('dimBackground', String(dimBackground.value))
 }
+function toggleSnapToGrid() {
+  snapToGrid.value = !snapToGrid.value
+  localStorage.setItem('snapToGrid', String(snapToGrid.value))
+}
 
 useKeyboard({
   onDelete: deleteSelected,
@@ -410,6 +415,8 @@ onMounted(() => {
       :dim-background="dimBackground"
       @toggle-grid="toggleGrid"
       @toggle-dim-bg="toggleDimBackground"
+      :snap-to-grid="snapToGrid"
+      @toggle-snap="toggleSnapToGrid"
     />
     <!-- prettier-ignore -->
     <PropertyBar
@@ -450,6 +457,7 @@ onMounted(() => {
         @context-menu="onContextMenu"
         :show-grid="showGrid"
         :dim-background="dimBackground"
+        :snap-to-grid="snapToGrid"
       />
       <PlantLibrary
         :materials="materials"
