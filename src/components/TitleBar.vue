@@ -20,6 +20,11 @@ function close() {
 }
 const isElectron = !!(window as any).electronAPI
 
+defineProps<{
+  showGrid: boolean
+  dimBackground: boolean
+}>()
+
 const emit = defineEmits<{
   'upload-photo': []
   save: []
@@ -31,6 +36,9 @@ const emit = defineEmits<{
   duplicate: []
   delete: []
   'reset-zoom': []
+  'open-canvas-settings': []
+  'toggle-grid': []
+  'toggle-dim-bg': []
 }>()
 
 function toggleMenu(name: string) {
@@ -98,6 +106,8 @@ window.addEventListener('click', onWindowClick)
           <div class="dd-item" @click="fire('load')">Load</div>
           <div class="dd-item" @click="fire('export')">Export PNG</div>
           <div class="dd-sep" />
+          <div class="dd-item" @click="fire('open-canvas-settings')">Canvas Settings...</div>
+          <div class="dd-sep" />
           <div
             class="dd-item submenu-trigger"
             @mouseenter="openSubmenu = 'preferences'"
@@ -142,6 +152,17 @@ window.addEventListener('click', onWindowClick)
       >
         View
         <div v-if="openMenu === 'view'" class="dropdown" @click.stop>
+          <div class="dd-item" @click="fire('toggle-grid')">
+            <span
+              ><span class="check">{{ showGrid ? '✓' : '' }}</span> Show Grid</span
+            >
+          </div>
+          <div class="dd-item" @click="fire('toggle-dim-bg')">
+            <span
+              ><span class="check">{{ dimBackground ? '✓' : '' }}</span> Dim Background</span
+            >
+          </div>
+          <div class="dd-sep" />
           <div class="dd-item" @click="fire('reset-zoom')">
             Reset Zoom<span class="dd-shortcut">Ctrl+0</span>
           </div>
@@ -348,5 +369,10 @@ window.addEventListener('click', onWindowClick)
 .wc-btn.close:hover {
   background: #e81123;
   color: #fff;
+}
+.check {
+  display: inline-block;
+  width: 14px;
+  color: var(--accent);
 }
 </style>

@@ -31,6 +31,8 @@ const props = defineProps<{
   selectedCoverId: number | null
   scaleFeetPer100px: number | null
   disableZoom: boolean
+  showGrid: boolean
+  dimBackground: boolean
 }>()
 
 const emit = defineEmits<{
@@ -53,6 +55,7 @@ const stageScale = ref(1)
 let stage: Konva.Stage
 let bgLayer: Konva.Layer
 let plantLayer: Konva.Layer
+let gridLayer: Konva.Layer
 let transformer: Konva.Transformer
 let isUpdating = false
 let spaceKeyDown: (e: KeyboardEvent) => void
@@ -81,6 +84,8 @@ function initStage() {
   })
 
   bgLayer = new Konva.Layer()
+  gridLayer = new Konva.Layer({ listening: false })
+  stage.add(gridLayer)
   plantLayer = new Konva.Layer()
   stage.add(bgLayer)
 
@@ -121,6 +126,11 @@ function initStage() {
       x: pointer.x - mousePointTo.x * clamped,
       y: pointer.y - mousePointTo.y * clamped,
     })
+    stage.position({
+      x: pointer.x - mousePointTo.x * clamped,
+      y: pointer.y - mousePointTo.y * clamped,
+    })
+    drawGrid()
   })
   let isPanning = false
   let panStart = { x: 0, y: 0 }
@@ -140,6 +150,7 @@ function initStage() {
       x: e.evt.clientX - panStart.x,
       y: e.evt.clientY - panStart.y,
     })
+    drawGrid()
   })
 
   stage.on('mouseup', () => {
@@ -188,6 +199,7 @@ function initStage() {
         x: e.evt.clientX - panStart.x,
         y: e.evt.clientY - panStart.y,
       })
+      drawGrid()
     }
   })
 
@@ -248,7 +260,69 @@ function initStage() {
     if (pos) cursorPos.value = pos
   })
 }
+function drawGrid() {
+  if (!gridLayer) return
+  gridLayer.destroyChildren()
+  if (!props.showGrid) {
+    gridLayer.draw()
+    return
+  }
 
+  const w = stage.width()
+  const h = stage.height()
+  const scale = stage.scaleX()
+  const offsetX = stage.x()
+  const offsetY = stage.y()
+
+  // Determine spacing
+  let minorSpacing: number
+  let majorSpacing: number
+  if (props.scaleFeetPer100px && props.scaleFeetPer100px > 0) {
+    const stagePxPerUnit = 100 / props.scaleFeetPer100px // 1 unit in stage px
+    minorSpacing = stagePxPerUnit         // 1 unit
+    majorSpacing = stagePxPerUnit * 10    // 10 units
+  } else {
+    minorSpacing = 40
+    majorSpacing = 200
+  }
+
+  const minorVisible = minorSpacing * scale > 4 // hide minor when too dense
+
+  const left = -offsetX / scale
+  const top = -offsetY / scale
+  const right = left + w / scale
+  const bottom = top + h / scale
+
+  const addLine = (points: number[], stroke: string) => {
+    gridLayer.add(new Konva.Line({
+      points, stroke, strokeWidth: 1 / scale, listening: false,
+    }))
+  }
+
+  if (minorVisible) {
+    const startX = Math.floor(left / minorSpacing) * minorSpacing
+    const startY = Math.floor(top / minorSpacing) * minorSpacing
+    for (let x = startX; x < right; x += minorSpacing) {
+      if (Math.abs(x % majorSpacing) < 0.01) continue
+      addLine([x, top, x, bottom], 'rgba(255,255,255,0.04)')
+    }
+    for (let y = startY; y < bottom; y += minorSpacing) {
+      if (Math.abs(y % majorSpacing) < 0.01) continue
+      addLine([left, y, right, y], 'rgba(255,255,255,0.04)')
+    }
+  }
+
+  const startMajorX = Math.floor(left / majorSpacing) * majorSpacing
+  const startMajorY = Math.floor(top / majorSpacing) * majorSpacing
+  for (let x = startMajorX; x < right; x += majorSpacing) {
+    addLine([x, top, x, bottom], 'rgba(255,255,255,0.12)')
+  }
+  for (let y = startMajorY; y < bottom; y += majorSpacing) {
+    addLine([left, y, right, y], 'rgba(255,255,255,0.12)')
+  }
+
+  gridLayer.draw()
+}
 function onResize() {
   if (!stage || !wrapperRef.value) return
   const { width, height } = wrapperRef.value.getBoundingClientRect()
@@ -278,6 +352,7 @@ function drawBackground() {
       y: (sh - h) / 2,
       width: w,
       height: h,
+      opacity: props.dimBackground ? 0.4 : 1,
     })
     bgLayer.add(kImg)
     bgLayer.draw()
@@ -285,6 +360,7 @@ function drawBackground() {
   img.src = props.backgroundImage
 }
 
+watch(() => props.dimBackground, drawBackground)
 watch(() => props.groundCovers, syncGroundCovers, { deep: true })
 watch(
   () => props.drawMode,
@@ -300,11 +376,16 @@ watch(
     if (stage) stage.container().style.cursor = val ? 'crosshair' : 'default'
   },
 )
-watch(() => props.disableZoom, (val) => {
-  if (transformer) transformer.listening(!val)
-  syncPlants(props.plants)
-  syncGroundCovers(props.groundCovers)
-})
+watch(() => props.showGrid, drawGrid)
+watch(() => props.scaleFeetPer100px, drawGrid)
+watch(
+  () => props.disableZoom,
+  (val) => {
+    if (transformer) transformer.listening(!val)
+    syncPlants(props.plants)
+    syncGroundCovers(props.groundCovers)
+  },
+)
 
 function createPatternCanvas(material: string, fill: string): HTMLCanvasElement {
   const size = 20
@@ -603,6 +684,7 @@ function resetZoom() {
   stage.scale({ x: 1, y: 1 })
   stage.position({ x: 0, y: 0 })
   stageScale.value = 1
+  drawGrid()
 }
 
 defineExpose({

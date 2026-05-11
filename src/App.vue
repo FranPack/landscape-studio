@@ -10,6 +10,7 @@ import PlantLibrary from './components/PlantLibrary.vue'
 import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
+import CanvasSettingsModal from '@/components/CanvasSettingsModal.vue'
 
 interface Plant {
   id: number
@@ -35,7 +36,7 @@ interface GroundCover {
 const history = useHistoryStore()
 const isElectron = navigator.userAgent.includes('Electron')
 const stageZoom = ref(1)
-const theme = ref<'dark' | 'light'>('dark')
+const theme = ref<'dark' | 'light'>((localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark')
 const backgroundImage = ref<string | null>(null)
 const plants = ref<Plant[]>([])
 const selectedId = ref<number | null>(null)
@@ -54,6 +55,10 @@ const scaleFeetPer100px = ref<number | null>(null)
 const contextMenu = ref<{ x: number; y: number } | null>(null)
 const contextMenuRef = ref<HTMLDivElement | null>(null)
 const showSettings = ref(false)
+const showCanvasSettings = ref(false)
+const units = ref<'ft' | 'm'>('ft')
+const showGrid = ref(localStorage.getItem('showGrid') === 'true')
+const dimBackground = ref(localStorage.getItem('dimBackground') === 'true')
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -66,6 +71,7 @@ const materials = [
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   document.documentElement.classList.toggle('light', theme.value === 'light')
+  localStorage.setItem('theme', theme.value)
 }
 
 function flipSelectedV() {
@@ -345,6 +351,16 @@ function onLoadFile(e: Event) {
   ;(e.target as HTMLInputElement).value = ''
 }
 
+function toggleGrid() {
+  showGrid.value = !showGrid.value
+  localStorage.setItem('showGrid', String(showGrid.value))
+}
+
+function toggleDimBackground() {
+  dimBackground.value = !dimBackground.value
+  localStorage.setItem('dimBackground', String(dimBackground.value))
+}
+
 useKeyboard({
   onDelete: deleteSelected,
   onEscape: () => {
@@ -365,6 +381,7 @@ useKeyboard({
 })
 onMounted(() => {
   if (import.meta.env.DEV) backgroundImage.value = '/default.png'
+  document.documentElement.classList.toggle('light', theme.value === 'light')
 })
 </script>
 
@@ -388,6 +405,11 @@ onMounted(() => {
       @delete="deleteSelected"
       @reset-zoom="resetZoom"
       @open-settings="showSettings = true"
+      @open-canvas-settings="showCanvasSettings = true"
+      :show-grid="showGrid"
+      :dim-background="dimBackground"
+      @toggle-grid="toggleGrid"
+      @toggle-dim-bg="toggleDimBackground"
     />
     <!-- prettier-ignore -->
     <PropertyBar
@@ -426,6 +448,8 @@ onMounted(() => {
         @cover-selection-changed="selectedCoverId = $event; selectedId = null; canvasRef?.clearSelection()"
         @cover-moved="onCoverMoved($event)"
         @context-menu="onContextMenu"
+        :show-grid="showGrid"
+        :dim-background="dimBackground"
       />
       <PlantLibrary
         :materials="materials"
@@ -476,6 +500,16 @@ onMounted(() => {
       @close="showSettings = false"
       @toggle-theme="toggleTheme"
       @update:scale-feet-per100px="scaleFeetPer100px = $event"
+    />
+    <CanvasSettingsModal
+      v-if="showCanvasSettings"
+      :scale-feet-per100px="scaleFeetPer100px"
+      :units="units"
+      :project-name="projectName"
+      @close="showCanvasSettings = false"
+      @update:scale-feet-per100px="scaleFeetPer100px = $event"
+      @update:units="units = $event"
+      @update:project-name="projectName = $event"
     />
     <!-- Drag ghost -->
     <div
