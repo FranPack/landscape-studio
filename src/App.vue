@@ -60,6 +60,7 @@ const units = ref<'ft' | 'm'>('ft')
 const showGrid = ref(localStorage.getItem('showGrid') === 'true')
 const dimBackground = ref(localStorage.getItem('dimBackground') === 'true')
 const snapToGrid = ref(localStorage.getItem('snapToGrid') === 'true')
+const cursorPos = ref<{ x: number; y: number } | null>(null)
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -458,6 +459,8 @@ onMounted(() => {
         :show-grid="showGrid"
         :dim-background="dimBackground"
         :snap-to-grid="snapToGrid"
+        @zoom-change="stageZoom = $event"
+        @cursor-move="cursorPos = $event"
       />
       <PlantLibrary
         :materials="materials"
@@ -468,8 +471,11 @@ onMounted(() => {
     </div>
     <StatusBar
       :zoom="stageZoom"
+      :cursor-x="cursorPos?.x ?? null"
+      :cursor-y="cursorPos?.y ?? null"
+      :scale-feet-per100px="scaleFeetPer100px"
+      :units="units"
       :active-tool="drawMode ? 'Draw' : 'Select'"
-      @toggle-theme="toggleTheme"
     />
 
     <!-- Hidden inputs -->

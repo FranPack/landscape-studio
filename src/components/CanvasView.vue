@@ -45,6 +45,8 @@ const emit = defineEmits<{
   'context-menu': [
     payload: { x: number; y: number; targetType: 'plant' | 'cover'; targetId: number },
   ]
+  'zoom-change': [zoom: number]
+  'cursor-move': [pos: { x: number; y: number } | null]
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -62,6 +64,7 @@ let isUpdating = false
 let spaceKeyDown: (e: KeyboardEvent) => void
 let spaceKeyUp: (e: KeyboardEvent) => void
 let groundCoverLayer: Konva.Layer
+let imagePos = { x: 0, y: 0 }
 
 onMounted(() => {
   initStage()
@@ -123,6 +126,7 @@ function initStage() {
 
     stage.scale({ x: clamped, y: clamped })
     stageScale.value = clamped
+    emit('zoom-change', clamped)
     stage.position({
       x: pointer.x - mousePointTo.x * clamped,
       y: pointer.y - mousePointTo.y * clamped,
@@ -256,10 +260,16 @@ function initStage() {
   })
 
   stage.on('mousemove', () => {
-    if (!props.drawMode) return
     const pos = stage.getRelativePointerPosition()
-    if (pos) cursorPos.value = pos
+    if (pos) {
+      emit('cursor-move', { x: pos.x - imagePos.x, y: pos.y - imagePos.y })
+    } else {
+      emit('cursor-move', null)
+    }
+    if (props.drawMode && pos) cursorPos.value = pos
   })
+
+  stage.on('mouseleave', () => emit('cursor-move', null))
 }
 function drawGrid() {
   if (!gridLayer) return
@@ -300,20 +310,20 @@ function drawGrid() {
   }
 
   if (minorVisible) {
-    const startX = Math.floor(left / minorSpacing) * minorSpacing
-    const startY = Math.floor(top / minorSpacing) * minorSpacing
+    const startX = Math.floor((left - imagePos.x) / minorSpacing) * minorSpacing + imagePos.x
+    const startY = Math.floor((top - imagePos.y) / minorSpacing) * minorSpacing + imagePos.y
     for (let x = startX; x < right; x += minorSpacing) {
-      if (Math.abs(x % majorSpacing) < 0.01) continue
+      if (Math.abs((x - imagePos.x) % majorSpacing) < 0.01) continue
       addLine([x, top, x, bottom], 'rgba(255,255,255,0.04)')
     }
     for (let y = startY; y < bottom; y += minorSpacing) {
-      if (Math.abs(y % majorSpacing) < 0.01) continue
+      if (Math.abs((y - imagePos.y) % majorSpacing) < 0.01) continue
       addLine([left, y, right, y], 'rgba(255,255,255,0.04)')
     }
   }
 
-  const startMajorX = Math.floor(left / majorSpacing) * majorSpacing
-  const startMajorY = Math.floor(top / majorSpacing) * majorSpacing
+  const startMajorX = Math.floor((left - imagePos.x) / majorSpacing) * majorSpacing + imagePos.x
+  const startMajorY = Math.floor((top - imagePos.y) / majorSpacing) * majorSpacing + imagePos.y
   for (let x = startMajorX; x < right; x += majorSpacing) {
     addLine([x, top, x, bottom], 'rgba(255,255,255,0.12)')
   }
@@ -354,8 +364,12 @@ function drawBackground() {
       height: h,
       opacity: props.dimBackground ? 0.4 : 1,
     })
+
+    imagePos = { x: (sw - w) / 2, y: (sh - h) / 2 }
+    console.log('imagePos set:', imagePos)
     bgLayer.add(kImg)
     bgLayer.draw()
+    drawGrid()
   }
   img.src = props.backgroundImage
 }
@@ -474,8 +488,8 @@ function syncGroundCovers(covers: GroundCover[]) {
     group.on('dragmove', () => {
       if (!props.snapToGrid) return
       const s = getMinorSpacing()
-      group.x(Math.round(group.x() / s) * s)
-      group.y(Math.round(group.y() / s) * s)
+      group.x(Math.round((group.x() - imagePos.x) / s) * s + imagePos.x)
+      group.y(Math.round((group.y() - imagePos.y) / s) * s + imagePos.y)
     })
     groundCoverLayer.add(group)
 
@@ -613,7 +627,7 @@ function syncPlants(newPlants: Plant[]) {
         rotation: plant.rotation,
         draggable: !props.disableZoom,
         offsetX: plant.width / 2,
-        offsetY: plant.height / 2,
+        offsetY: plant.height,
       })
 
       node.on('click tap', () => {
@@ -647,8 +661,8 @@ function syncPlants(newPlants: Plant[]) {
       node.on('dragmove', () => {
         if (!props.snapToGrid) return
         const s = getMinorSpacing()
-        node.x(Math.round(node.x() / s) * s)
-        node.y(Math.round(node.y() / s) * s)
+        node.x(Math.round((node.x() - imagePos.x) / s) * s + imagePos.x)
+        node.y(Math.round((node.y() - imagePos.y) / s) * s + imagePos.y)
       })
       plantLayer.add(node)
       transformer.moveToTop()
@@ -696,6 +710,7 @@ function resetZoom() {
   stage.scale({ x: 1, y: 1 })
   stage.position({ x: 0, y: 0 })
   stageScale.value = 1
+  emit('zoom-change', 1)
   drawGrid()
 }
 function getMinorSpacing(): number {
