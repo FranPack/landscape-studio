@@ -41,6 +41,7 @@ const emit = defineEmits<{
   'toggle-dim-bg': []
   'toggle-snap': []
   'open-shortcuts': []
+  'open-about': []
 }>()
 
 function toggleMenu(name: string) {
@@ -185,7 +186,7 @@ window.addEventListener('click', onWindowClick)
         Help
         <div v-if="openMenu === 'help'" class="dropdown" @click.stop>
           <div class="dd-item" @click="fire('open-shortcuts')">Keyboard Shortcuts</div>
-          <div class="dd-item">About</div>
+          <div class="dd-item" @click="fire('open-about')">About</div>
         </div>
       </div>
     </div>
