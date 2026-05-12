@@ -110,9 +110,11 @@ function initStage() {
     }
   })
   stage.on('wheel', (e) => {
-    e.evt.preventDefault()
-    if (props.disableZoom) return
+  e.evt.preventDefault()
+  if (props.disableZoom) return
 
+  // Zoom with Ctrl/Cmd
+  if (e.evt.ctrlKey || e.evt.metaKey) {
     const scaleBy = 1.05
     const oldScale = stage.scaleX()
     const pointer = stage.getPointerPosition()!
@@ -132,12 +134,19 @@ function initStage() {
       x: pointer.x - mousePointTo.x * clamped,
       y: pointer.y - mousePointTo.y * clamped,
     })
-    stage.position({
-      x: pointer.x - mousePointTo.x * clamped,
-      y: pointer.y - mousePointTo.y * clamped,
-    })
     drawGrid()
+    return
+  }
+
+  // Pan: shift converts vertical scroll to horizontal
+  const dx = e.evt.shiftKey ? e.evt.deltaY : e.evt.deltaX
+  const dy = e.evt.shiftKey ? 0 : e.evt.deltaY
+  stage.position({
+    x: stage.x() - dx,
+    y: stage.y() - dy,
   })
+  drawGrid()
+})
   let isPanning = false
   let panStart = { x: 0, y: 0 }
 

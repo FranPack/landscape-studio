@@ -40,7 +40,9 @@ const shortcuts = [
     section: 'Canvas',
     items: [
       { keys: ['Ctrl', '0'], action: 'Reset zoom' },
-      { keys: ['Scroll'], action: 'Zoom in/out' },
+      { keys: ['Ctrl', 'Scroll'], action: 'Zoom in/out' },
+      { keys: ['Scroll'], action: 'Pan vertical' },
+      { keys: ['Shift', 'Scroll'], action: 'Pan horizontal' },
       {
         keys: [
           ['Middle click', 'Drag'],
