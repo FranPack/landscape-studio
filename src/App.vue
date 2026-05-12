@@ -11,6 +11,7 @@ import StatusBar from './components/StatusBar.vue'
 import TitleBar from './components/TitleBar.vue'
 import SettingsModal from '@/components/SettingsModal.vue'
 import CanvasSettingsModal from '@/components/CanvasSettingsModal.vue'
+import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
 
 interface Plant {
   id: number
@@ -61,6 +62,7 @@ const showGrid = ref(localStorage.getItem('showGrid') === 'true')
 const dimBackground = ref(localStorage.getItem('dimBackground') === 'true')
 const snapToGrid = ref(localStorage.getItem('snapToGrid') === 'true')
 const cursorPos = ref<{ x: number; y: number } | null>(null)
+const showShortcuts = ref(false)
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -419,6 +421,7 @@ onMounted(() => {
       @toggle-dim-bg="toggleDimBackground"
       :snap-to-grid="snapToGrid"
       @toggle-snap="toggleSnapToGrid"
+      @open-shortcuts="showShortcuts = true"
     />
     <!-- prettier-ignore -->
     <PropertyBar
@@ -526,6 +529,7 @@ onMounted(() => {
       @update:units="units = $event"
       @update:project-name="projectName = $event"
     />
+    <KeyboardShortcutsModal v-if="showShortcuts" @close="showShortcuts = false" />
     <!-- Drag ghost -->
     <div
       v-if="drag.dragging"
