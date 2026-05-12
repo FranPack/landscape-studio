@@ -103,9 +103,10 @@ function initStage() {
   plantLayer.add(transformer)
 
   stage.on('click tap', (e) => {
-    if (e.target === stage) {
+    if (e.target === stage || e.target.getLayer() === bgLayer) {
       transformer.nodes([])
       emit('selection-changed', null)
+      emit('cover-selection-changed', null)
     }
   })
   stage.on('wheel', (e) => {
@@ -284,6 +285,9 @@ function drawGrid() {
   const scale = stage.scaleX()
   const offsetX = stage.x()
   const offsetY = stage.y()
+  const styles = getComputedStyle(document.documentElement)
+  const minorColor = styles.getPropertyValue('--grid-minor').trim()
+  const majorColor = styles.getPropertyValue('--grid-major').trim()
 
   // Determine spacing
   let minorSpacing: number
@@ -314,21 +318,21 @@ function drawGrid() {
     const startY = Math.floor((top - imagePos.y) / minorSpacing) * minorSpacing + imagePos.y
     for (let x = startX; x < right; x += minorSpacing) {
       if (Math.abs((x - imagePos.x) % majorSpacing) < 0.01) continue
-      addLine([x, top, x, bottom], 'rgba(255,255,255,0.04)')
+      addLine([x, top, x, bottom], minorColor)
     }
     for (let y = startY; y < bottom; y += minorSpacing) {
       if (Math.abs((y - imagePos.y) % majorSpacing) < 0.01) continue
-      addLine([left, y, right, y], 'rgba(255,255,255,0.04)')
+      addLine([left, y, right, y], minorColor)
     }
   }
 
   const startMajorX = Math.floor((left - imagePos.x) / majorSpacing) * majorSpacing + imagePos.x
   const startMajorY = Math.floor((top - imagePos.y) / majorSpacing) * majorSpacing + imagePos.y
   for (let x = startMajorX; x < right; x += majorSpacing) {
-    addLine([x, top, x, bottom], 'rgba(255,255,255,0.12)')
+    addLine([x, top, x, bottom], majorColor)
   }
   for (let y = startMajorY; y < bottom; y += majorSpacing) {
-    addLine([left, y, right, y], 'rgba(255,255,255,0.12)')
+    addLine([left, y, right, y], majorColor)
   }
 
   gridLayer.draw()
@@ -728,6 +732,11 @@ defineExpose({
       y: (stage.height() / 2 - stage.y()) / scale,
     }
   },
+  redraw: () => {
+    drawGrid()
+    syncPlants(props.plants)
+    syncGroundCovers(props.groundCovers)
+  },
 
   getCanvasPosition: (clientX: number, clientY: number) => {
     const rect = canvasEl.value?.getBoundingClientRect()
@@ -775,7 +784,7 @@ defineExpose({
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #111;
+  background: var(--bg-base);
 }
 
 .empty-state {
@@ -786,7 +795,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: #555;
+  color: var(--text-muted);
 }
 
 .empty-icon {
@@ -795,12 +804,12 @@ defineExpose({
 
 .empty-state p {
   font-size: 16px;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .empty-state .hint {
   font-size: 13px;
-  color: #444;
+  color: var(--text-muted);
 }
 .scale-bar {
   position: absolute;
@@ -816,9 +825,9 @@ defineExpose({
 .scale-bar-line {
   width: 100px;
   height: 4px;
-  background: #fff;
-  border-left: 2px solid #fff;
-  border-right: 2px solid #fff;
+  background: var(--text-primary);
+  border-left: 2px solid var(--text-primary);
+  border-right: 2px solid var(--text-primary);
   border-top: none;
 }
 .scale-bar span {

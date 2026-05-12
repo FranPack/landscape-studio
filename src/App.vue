@@ -74,6 +74,7 @@ function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
   document.documentElement.classList.toggle('light', theme.value === 'light')
   localStorage.setItem('theme', theme.value)
+  canvasRef.value?.redraw()
 }
 
 function flipSelectedV() {
