@@ -34,6 +34,7 @@ const props = defineProps<{
   showGrid: boolean
   dimBackground: boolean
   snapToGrid: boolean
+  viewMode: 'photo' | 'plan'
 }>()
 
 const emit = defineEmits<{
@@ -110,43 +111,43 @@ function initStage() {
     }
   })
   stage.on('wheel', (e) => {
-  e.evt.preventDefault()
-  if (props.disableZoom) return
+    e.evt.preventDefault()
+    if (props.disableZoom) return
 
-  // Zoom with Ctrl/Cmd
-  if (e.evt.ctrlKey || e.evt.metaKey) {
-    const scaleBy = 1.05
-    const oldScale = stage.scaleX()
-    const pointer = stage.getPointerPosition()!
+    // Zoom with Ctrl/Cmd
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+      const scaleBy = 1.05
+      const oldScale = stage.scaleX()
+      const pointer = stage.getPointerPosition()!
 
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
+      const mousePointTo = {
+        x: (pointer.x - stage.x()) / oldScale,
+        y: (pointer.y - stage.y()) / oldScale,
+      }
+
+      const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
+      const clamped = Math.max(0.2, Math.min(5, newScale))
+
+      stage.scale({ x: clamped, y: clamped })
+      stageScale.value = clamped
+      emit('zoom-change', clamped)
+      stage.position({
+        x: pointer.x - mousePointTo.x * clamped,
+        y: pointer.y - mousePointTo.y * clamped,
+      })
+      drawGrid()
+      return
     }
 
-    const newScale = e.evt.deltaY < 0 ? oldScale * scaleBy : oldScale / scaleBy
-    const clamped = Math.max(0.2, Math.min(5, newScale))
-
-    stage.scale({ x: clamped, y: clamped })
-    stageScale.value = clamped
-    emit('zoom-change', clamped)
+    // Pan: shift converts vertical scroll to horizontal
+    const dx = e.evt.shiftKey ? e.evt.deltaY : e.evt.deltaX
+    const dy = e.evt.shiftKey ? 0 : e.evt.deltaY
     stage.position({
-      x: pointer.x - mousePointTo.x * clamped,
-      y: pointer.y - mousePointTo.y * clamped,
+      x: stage.x() - dx,
+      y: stage.y() - dy,
     })
     drawGrid()
-    return
-  }
-
-  // Pan: shift converts vertical scroll to horizontal
-  const dx = e.evt.shiftKey ? e.evt.deltaY : e.evt.deltaX
-  const dy = e.evt.shiftKey ? 0 : e.evt.deltaY
-  stage.position({
-    x: stage.x() - dx,
-    y: stage.y() - dy,
   })
-  drawGrid()
-})
   let isPanning = false
   let panStart = { x: 0, y: 0 }
 
@@ -779,12 +780,12 @@ defineExpose({
       <span>{{ (scaleFeetPer100px / stageScale).toFixed(1) }} ft</span>
     </div>
 
-    <div v-if="!backgroundImage" class="empty-state">
+    <div v-if="!backgroundImage && viewMode === 'photo'" class="empty-state">
       <div class="empty-icon">🌿</div>
       <p>Upload a photo of your yard to get started</p>
       <p class="hint">Then click any plant in the sidebar to place it</p>
     </div>
-    <div ref="canvasEl" v-show="backgroundImage" />
+    <div ref="canvasEl" v-show="backgroundImage || viewMode === 'plan'" />
   </div>
 </template>
 

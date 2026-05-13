@@ -13,6 +13,7 @@ import SettingsModal from '@/components/SettingsModal.vue'
 import CanvasSettingsModal from '@/components/CanvasSettingsModal.vue'
 import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
 import AboutModal from '@/components/AboutModal.vue'
+import HomeScreen from '@/components/HomeScreen.vue'
 
 interface Plant {
   id: number
@@ -40,13 +41,11 @@ const isElectron = navigator.userAgent.includes('Electron')
 const stageZoom = ref(1)
 const theme = ref<'dark' | 'light'>((localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark')
 const backgroundImage = ref<string | null>(null)
-const plants = ref<Plant[]>([])
 const selectedId = ref<number | null>(null)
 const selectedCoverId = ref<number | null>(null)
 let nextPlantId = 1
 const fileInput = ref<HTMLInputElement | null>(null)
 const canvasRef = ref<InstanceType<typeof CanvasView> | null>(null)
-const groundCovers = ref<GroundCover[]>([])
 const drawMode = ref(false)
 const selectedMaterial = ref<{ name: string; fill: string }>({ name: 'turf', fill: '#4a7c3f' })
 // eslint-disable-next-line prefer-const, @typescript-eslint/no-unused-vars
@@ -65,6 +64,13 @@ const snapToGrid = ref(localStorage.getItem('snapToGrid') === 'true')
 const cursorPos = ref<{ x: number; y: number } | null>(null)
 const showShortcuts = ref(false)
 const showAbout = ref(false)
+const projectOpen = ref(false)
+const projectType = ref<'photo' | 'plan'>('photo')
+const currentView = ref<'photo' | 'plan'>('photo')
+const photoPlants = ref<Plant[]>([])
+const photoGroundCovers = ref<GroundCover[]>([])
+const planPlants = ref<Plant[]>([])
+const planGroundCovers = ref<GroundCover[]>([])
 
 const materials = [
   { name: 'turf', fill: '#4a7c3f' },
@@ -73,6 +79,50 @@ const materials = [
   { name: 'sand', fill: '#c2a96e' },
   { name: 'concrete', fill: '#b0b0b0' },
 ]
+
+const plants = computed({
+  get: () => currentView.value === 'photo' ? photoPlants.value : planPlants.value,
+  set: (val) => {
+    if (currentView.value === 'photo') photoPlants.value = val
+    else planPlants.value = val
+  },
+})
+
+const groundCovers = computed({
+  get: () => currentView.value === 'photo' ? photoGroundCovers.value : planGroundCovers.value,
+  set: (val) => {
+    if (currentView.value === 'photo') photoGroundCovers.value = val
+    else planGroundCovers.value = val
+  },
+})
+
+function newProject(type: 'photo' | 'plan') {
+  projectName.value = type === 'photo' ? 'New Photo Project' : 'New Site Plan'
+  projectType.value = type
+  photoPlants.value = []
+  photoGroundCovers.value = []
+  planPlants.value = []
+  planGroundCovers.value = []
+  backgroundImage.value = null
+  selectedId.value = null
+  selectedCoverId.value = null
+  currentView.value = type
+  history.clear()
+  projectOpen.value = true
+
+  if (type === 'plan') {
+    showGrid.value = true
+    localStorage.setItem('showGrid', 'true')
+  }
+
+  if (type === 'photo') {
+    fileInput.value?.click()
+  }
+}
+
+function closeProject() {
+  projectOpen.value = false
+}
 
 function toggleTheme() {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
@@ -350,6 +400,7 @@ function onLoadFile(e: Event) {
       selectedId.value = null
       selectedCoverId.value = null
       history.clear()
+      projectOpen.value = true
     } catch {
       console.error('Failed to load project')
     }
@@ -425,9 +476,14 @@ onMounted(() => {
       @toggle-snap="toggleSnapToGrid"
       @open-shortcuts="showShortcuts = true"
       @open-about="showAbout = true"
+      @close-project="closeProject"
+      :project-open="projectOpen"
     />
-    <!-- prettier-ignore -->
-    <PropertyBar
+    <HomeScreen v-if="!projectOpen" @new-project="newProject" @open-project="loadProject" />
+
+    <template v-else>
+      <!-- prettier-ignore -->
+      <PropertyBar
       :selected-id="selectedId"
       :selected-cover-id="selectedCoverId"
       :selected-cover-opacity="selectedCoverOpacity"
@@ -444,12 +500,12 @@ onMounted(() => {
       @update:project-name="projectName = $event"
       @cancel-draw="drawMode = false; canvasRef?.cancelDraw()"
     />
-    <div class="workspace">
-      <ToolStrip :draw-mode="drawMode" @toggle-draw-mode="drawMode = !drawMode" />
-      <!-- prettier-ignore -->
-      <CanvasView
+      <div class="workspace">
+        <ToolStrip :draw-mode="drawMode" @toggle-draw-mode="drawMode = !drawMode" />
+        <!-- prettier-ignore -->
+        <CanvasView
         ref="canvasRef"
-        :background-image="backgroundImage"
+        :background-image="currentView === 'photo' ? backgroundImage : null"
         :plants="plants"
         :ground-covers="groundCovers"
         :draw-mode="drawMode"
@@ -468,22 +524,24 @@ onMounted(() => {
         :snap-to-grid="snapToGrid"
         @zoom-change="stageZoom = $event"
         @cursor-move="cursorPos = $event"
+        :view-mode="currentView"
       />
-      <PlantLibrary
-        :materials="materials"
-        :selected-material="selectedMaterial"
-        @plant-selected="addPlant"
-        @select-material="selectedMaterial = $event"
+        <PlantLibrary
+          :materials="materials"
+          :selected-material="selectedMaterial"
+          @plant-selected="addPlant"
+          @select-material="selectedMaterial = $event"
+        />
+      </div>
+      <StatusBar
+        :zoom="stageZoom"
+        :cursor-x="cursorPos?.x ?? null"
+        :cursor-y="cursorPos?.y ?? null"
+        :scale-feet-per100px="scaleFeetPer100px"
+        :units="units"
+        :active-tool="drawMode ? 'Draw' : 'Select'"
       />
-    </div>
-    <StatusBar
-      :zoom="stageZoom"
-      :cursor-x="cursorPos?.x ?? null"
-      :cursor-y="cursorPos?.y ?? null"
-      :scale-feet-per100px="scaleFeetPer100px"
-      :units="units"
-      :active-tool="drawMode ? 'Draw' : 'Select'"
-    />
+    </template>
 
     <!-- Hidden inputs -->
     <input

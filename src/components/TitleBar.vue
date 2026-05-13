@@ -23,6 +23,7 @@ defineProps<{
   showGrid: boolean
   dimBackground: boolean
   snapToGrid: boolean
+  projectOpen: boolean
 }>()
 
 const emit = defineEmits<{
@@ -42,6 +43,7 @@ const emit = defineEmits<{
   'toggle-snap': []
   'open-shortcuts': []
   'open-about': []
+  'close-project': []
 }>()
 
 function toggleMenu(name: string) {
@@ -101,13 +103,14 @@ window.addEventListener('click', onWindowClick)
       >
         File
         <div v-if="openMenu === 'file'" class="dropdown" @click.stop>
-          <div class="dd-item" @click="fire('upload-photo')">Upload Photo</div>
-          <div class="dd-sep" />
-          <div class="dd-item" @click="fire('save')">
+          <div v-if="projectOpen" class="dd-item" @click="fire('upload-photo')">Upload Photo</div>
+          <div v-if="projectOpen" class="dd-sep" />
+          <div v-if="projectOpen" class="dd-item" @click="fire('save')">
             Save<span class="dd-shortcut">Ctrl+S</span>
           </div>
-          <div class="dd-item" @click="fire('load')">Load</div>
-          <div class="dd-item" @click="fire('export')">Export PNG</div>
+          <div v-if="projectOpen" class="dd-item" @click="fire('close-project')">Close Project</div>
+          <div class="dd-item" @click="fire('load')">Open Project</div>
+          <div v-if="projectOpen" class="dd-item" @click="fire('export')">Export PNG</div>
           <div class="dd-sep" />
           <div class="dd-item" @click="fire('open-canvas-settings')">Canvas Settings...</div>
           <div class="dd-sep" />
@@ -131,17 +134,17 @@ window.addEventListener('click', onWindowClick)
       >
         Edit
         <div v-if="openMenu === 'edit'" class="dropdown" @click.stop>
-          <div class="dd-item" @click="fire('undo')">
+          <div v-if="projectOpen" class="dd-item" @click="fire('undo')">
             Undo<span class="dd-shortcut">Ctrl+Z</span>
           </div>
-          <div class="dd-item" @click="fire('redo')">
+          <div v-if="projectOpen" class="dd-item" @click="fire('redo')">
             Redo<span class="dd-shortcut">Ctrl+Y</span>
           </div>
-          <div class="dd-sep" />
-          <div class="dd-item" @click="fire('duplicate')">
+          <div v-if="projectOpen" class="dd-sep" />
+          <div v-if="projectOpen" class="dd-item" @click="fire('duplicate')">
             Duplicate<span class="dd-shortcut">Ctrl+D</span>
           </div>
-          <div class="dd-item" @click="fire('delete')">
+          <div v-if="projectOpen" class="dd-item" @click="fire('delete')">
             Delete<span class="dd-shortcut">Del</span>
           </div>
         </div>
