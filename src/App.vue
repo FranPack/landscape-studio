@@ -39,8 +39,14 @@ interface GroundCover {
   opacity: number
 }
 
+interface Line {
+  id: number
+  points: number[]
+  type: 'fence' | 'property'
+}
+
 const history = useHistoryStore()
-const isElectron = navigator.userAgent.includes('Electron')
+// const isElectron = navigator.userAgent.includes('Electron')
 const stageZoom = ref(1)
 const theme = ref<'dark' | 'light'>((localStorage.getItem('theme') as 'dark' | 'light') ?? 'dark')
 const backgroundImage = ref<string | null>(null)
@@ -51,7 +57,11 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const canvasRef = ref<InstanceType<typeof CanvasView> | null>(null)
 type Tool = 'select' | 'ground-cover' | 'hardscape' | 'structure' | 'line-fence' | 'line-property'
 const activeTool = ref<Tool>('select')
-const selectedMaterial = ref<{ name: string; fill: string; category: string }>({ name: 'turf', fill: '#4a7c3f', category: 'cover' })
+const selectedMaterial = ref<{ name: string; fill: string; category: string }>({
+  name: 'turf',
+  fill: '#4a7c3f',
+  category: 'cover',
+})
 // eslint-disable-next-line prefer-const, @typescript-eslint/no-unused-vars
 let nextCoverId = 1
 const loadInput = ref<HTMLInputElement | null>(null)
@@ -75,6 +85,16 @@ const photoPlants = ref<Plant[]>([])
 const photoGroundCovers = ref<GroundCover[]>([])
 const planPlants = ref<Plant[]>([])
 const planGroundCovers = ref<GroundCover[]>([])
+const photoLines = ref<Line[]>([])
+const planLines = ref<Line[]>([])
+
+const lines = computed({
+  get: () => (currentView.value === 'photo' ? photoLines.value : planLines.value),
+  set: (val) => {
+    if (currentView.value === 'photo') photoLines.value = val
+    else planLines.value = val
+  },
+})
 
 const materials = [
   // Ground cover
@@ -125,6 +145,8 @@ function newProject(type: 'photo' | 'plan') {
   currentView.value = type
   history.clear()
   projectOpen.value = true
+  photoLines.value = []
+  planLines.value = []
 
   if (type === 'plan') {
     showGrid.value = true
@@ -192,9 +214,12 @@ watch(contextMenu, (val) => {
 })
 
 watch(activeTool, (tool) => {
-  if (tool === 'ground-cover') selectedMaterial.value = materials.find((m) => m.category === 'cover')!
-  else if (tool === 'hardscape') selectedMaterial.value = materials.find((m) => m.category === 'hardscape')!
-  else if (tool === 'structure') selectedMaterial.value = materials.find((m) => m.category === 'structure')!
+  if (tool === 'ground-cover')
+    selectedMaterial.value = materials.find((m) => m.category === 'cover')!
+  else if (tool === 'hardscape')
+    selectedMaterial.value = materials.find((m) => m.category === 'hardscape')!
+  else if (tool === 'structure')
+    selectedMaterial.value = materials.find((m) => m.category === 'structure')!
 })
 
 function onWheel(e: WheelEvent) {
@@ -230,6 +255,10 @@ function addPlant(plant: { src: string; name: string }, x?: number, y?: number) 
 function addGroundCover(cover: GroundCover) {
   history.push(plants.value, groundCovers.value)
   groundCovers.value.push(cover)
+}
+function addLine(line: Line) {
+  history.push(plants.value, groundCovers.value)
+  lines.value.push(line)
 }
 function onCoverMoved(payload: { id: number; points: number[] }) {
   const cover = groundCovers.value.find((c) => c.id === payload.id)
@@ -412,11 +441,20 @@ function resetZoom() {
 
 function saveProject() {
   const data = {
-    version: 1,
+    version: 2,
     projectName: projectName.value,
-    backgroundImage: backgroundImage.value,
-    plants: plants.value,
-    groundCovers: groundCovers.value,
+    currentView: currentView.value,
+    photoView: {
+      backgroundImage: backgroundImage.value,
+      plants: photoPlants.value,
+      groundCovers: photoGroundCovers.value,
+      lines: photoLines.value,
+    },
+    planView: {
+      plants: planPlants.value,
+      groundCovers: planGroundCovers.value,
+      lines: planLines.value,
+    },
   }
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -439,10 +477,17 @@ function onLoadFile(e: Event) {
     try {
       const data = JSON.parse(ev.target?.result as string)
       projectName.value = data.projectName ?? 'my-landscape'
-      backgroundImage.value = data.backgroundImage ?? null
-      plants.value = data.plants ?? []
-      groundCovers.value = data.groundCovers ?? []
-      nextPlantId = Math.max(0, ...plants.value.map((p: Plant) => p.id)) + 1
+      currentView.value = data.currentView ?? 'photo'
+      projectType.value = currentView.value
+      backgroundImage.value = data.photoView?.backgroundImage ?? null
+      photoPlants.value = data.photoView?.plants ?? []
+      photoGroundCovers.value = data.photoView?.groundCovers ?? []
+      photoLines.value = data.photoView?.lines ?? []
+      planPlants.value = data.planView?.plants ?? []
+      planGroundCovers.value = data.planView?.groundCovers ?? []
+      planLines.value = data.planView?.lines ?? []
+      const allPlants = [...photoPlants.value, ...planPlants.value]
+      nextPlantId = Math.max(0, ...allPlants.map((p: Plant) => p.id)) + 1
       selectedId.value = null
       selectedCoverId.value = null
       history.clear()
@@ -575,6 +620,8 @@ onMounted(() => {
         @zoom-change="stageZoom = $event"
         @cursor-move="cursorPos = $event"
         :view-mode="currentView"
+        :lines="lines"
+        @add-line="addLine"
       />
         <PlantLibrary
           :materials="materials"

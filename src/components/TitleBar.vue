@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const platform = (window as any).electronAPI?.platform ?? 'web'
+
 const openMenu = ref<string | null>(null)
 const openSubmenu = ref<string | null>(null)
 const isMaximized = ref(false)

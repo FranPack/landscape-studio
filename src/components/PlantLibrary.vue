@@ -5,14 +5,14 @@ import { PLANTS, type PlantAsset } from '@/data/plants'
 import { SYMBOLS, type PlantSymbol, type SymbolCategory } from '@/data/symbols'
 
 const props = defineProps<{
-  materials: { name: string; fill: string }[]
-  selectedMaterial: { name: string; fill: string }
+  materials: { name: string; fill: string; category: string }[]
+  selectedMaterial: { name: string; fill: string; category: string }
   viewMode: 'photo' | 'plan'
 }>()
 
 const emit = defineEmits<{
   'plant-selected': [plant: PlantAsset]
-  'select-material': [material: { name: string; fill: string }]
+  'select-material': [material: { name: string; fill: string; category: string }]
   'symbol-selected': [symbol: PlantSymbol]
 }>()
 

@@ -23,6 +23,11 @@ interface GroundCover {
   fill: string // hex color
   opacity: number
 }
+interface Line {
+  id: number
+  points: number[]
+  type: 'fence' | 'property'
+}
 
 const props = defineProps<{
   backgroundImage: string | null
@@ -37,6 +42,7 @@ const props = defineProps<{
   dimBackground: boolean
   snapToGrid: boolean
   viewMode: 'photo' | 'plan'
+  lines: Line[]
 }>()
 
 const emit = defineEmits<{
@@ -50,6 +56,7 @@ const emit = defineEmits<{
   ]
   'zoom-change': [zoom: number]
   'cursor-move': [pos: { x: number; y: number } | null]
+  'add-line': [line: Line]
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -61,7 +68,8 @@ const isDrawingPolygon = () =>
   props.activeTool === 'ground-cover' ||
   props.activeTool === 'hardscape' ||
   props.activeTool === 'structure'
-
+const isDrawingLine = () =>
+  props.activeTool === 'line-fence' || props.activeTool === 'line-property'
 let stage: Konva.Stage
 let bgLayer: Konva.Layer
 let plantLayer: Konva.Layer
@@ -72,11 +80,13 @@ let spaceKeyDown: (e: KeyboardEvent) => void
 let spaceKeyUp: (e: KeyboardEvent) => void
 let groundCoverLayer: Konva.Layer
 let imagePos = { x: 0, y: 0 }
+let linesLayer: Konva.Layer
 
 onMounted(() => {
   initStage()
   window.addEventListener('resize', onResize)
   drawBackground()
+  drawGrid()
 })
 
 onUnmounted(() => {
@@ -231,49 +241,63 @@ function initStage() {
   })
   groundCoverLayer = new Konva.Layer()
   stage.add(groundCoverLayer)
+  linesLayer = new Konva.Layer()
+  stage.add(linesLayer)
   stage.add(plantLayer) // make sure plantLayer is added AFTER so it's on top
 
   stage.on('click', () => {
-    if (!isDrawingPolygon()) return
     const pos = stage.getRelativePointerPosition()
     if (!pos) return
 
-    // Close polygon if clicking near first vertex (3+ points already placed)
-    if (inProgressPoints.value.length >= 6) {
-      const firstX = inProgressPoints.value[0]!
-      const firstY = inProgressPoints.value[1]!
-      const dist = Math.hypot(pos.x - firstX, pos.y - firstY)
-      if (dist < 12 / stage.scaleX()) {
-        emit('add-ground-cover', {
-          id: Date.now(),
-          points: inProgressPoints.value,
-          material: props.selectedMaterial.name,
-          fill: props.selectedMaterial.fill,
-          opacity: 1,
-        })
-        inProgressPoints.value = []
-        cursorPos.value = null
-        return
+    if (isDrawingPolygon()) {
+      // Close polygon if clicking near first vertex (3+ points already placed)
+      if (inProgressPoints.value.length >= 6) {
+        const firstX = inProgressPoints.value[0]!
+        const firstY = inProgressPoints.value[1]!
+        const dist = Math.hypot(pos.x - firstX, pos.y - firstY)
+        if (dist < 12 / stage.scaleX()) {
+          emit('add-ground-cover', {
+            id: Date.now(),
+            points: inProgressPoints.value,
+            material: props.selectedMaterial.name,
+            fill: props.selectedMaterial.fill,
+            opacity: 1,
+          })
+          inProgressPoints.value = []
+          cursorPos.value = null
+          return
+        }
       }
+      inProgressPoints.value.push(pos.x, pos.y)
+    } else if (isDrawingLine()) {
+      inProgressPoints.value.push(pos.x, pos.y)
     }
-
-    inProgressPoints.value.push(pos.x, pos.y)
   })
 
   stage.on('dblclick', () => {
-    if (!isDrawingPolygon()) return
-    // Remove the 2 extra points added by the preceding click events
     const pts = inProgressPoints.value.slice(0, -4)
-    if (pts.length < 6) return // need at least 3 points
-    emit('add-ground-cover', {
-      id: Date.now(),
-      points: pts,
-      material: props.selectedMaterial.name,
-      fill: props.selectedMaterial.fill,
-      opacity: 1,
-    })
-    inProgressPoints.value = []
-    cursorPos.value = null
+
+    if (isDrawingPolygon()) {
+      if (pts.length < 6) return // need 3+ vertices
+      emit('add-ground-cover', {
+        id: Date.now(),
+        points: pts,
+        material: props.selectedMaterial.name,
+        fill: props.selectedMaterial.fill,
+        opacity: 1,
+      })
+      inProgressPoints.value = []
+      cursorPos.value = null
+    } else if (isDrawingLine()) {
+      if (pts.length < 4) return // need at least 2 points
+      emit('add-line', {
+        id: Date.now(),
+        points: pts,
+        type: props.activeTool === 'line-fence' ? 'fence' : 'property',
+      })
+      inProgressPoints.value = []
+      cursorPos.value = null
+    }
   })
 
   stage.on('mousemove', () => {
@@ -283,7 +307,7 @@ function initStage() {
     } else {
       emit('cursor-move', null)
     }
-    if (isDrawingPolygon() && pos) cursorPos.value = pos
+    if ((isDrawingPolygon() || isDrawingLine()) && pos) cursorPos.value = pos
   })
 
   stage.on('mouseleave', () => emit('cursor-move', null))
@@ -306,10 +330,8 @@ function drawGrid() {
   const majorColor = styles.getPropertyValue('--grid-major').trim()
 
   // Determine spacing
-  let minorSpacing: number
-  let majorSpacing: number
-  minorSpacing = getMinorSpacing()
-  majorSpacing = minorSpacing * 10
+  const minorSpacing = getMinorSpacing()
+  const majorSpacing = minorSpacing * 10
 
   const minorVisible = minorSpacing * scale > 4 // hide minor when too dense
 
@@ -547,6 +569,58 @@ function syncGroundCovers(covers: GroundCover[]) {
   groundCoverLayer.draw()
 }
 
+function syncLines(lines: Line[]) {
+  if (!linesLayer) return
+  linesLayer.destroyChildren()
+  lines.forEach((line) => {
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7ec87e'
+    const isFence = line.type === 'fence'
+
+    const shape = new Konva.Line({
+      id: String(line.id),
+      name: 'line',
+      points: line.points,
+      stroke: isFence ? accent : 'rgba(255,255,255,0.6)',
+      strokeWidth: isFence ? 2 : 1.5,
+      dash: isFence ? undefined : [8, 4],
+      lineCap: 'round',
+      lineJoin: 'round',
+      closed: false,
+      listening: true,
+    })
+    linesLayer.add(shape)
+
+    // For fence: add small marks along the line
+    if (isFence) {
+      for (let i = 0; i < line.points.length - 2; i += 2) {
+        const x1 = line.points[i]!
+        const y1 = line.points[i + 1]!
+        const x2 = line.points[i + 2]!
+        const y2 = line.points[i + 3]!
+        const segments = 5
+        for (let j = 1; j < segments; j++) {
+          const t = j / segments
+          const mx = x1 + (x2 - x1) * t
+          const my = y1 + (y2 - y1) * t
+          const dx = x2 - x1
+          const dy = y2 - y1
+          const len = Math.hypot(dx, dy)
+          if (len === 0) continue
+          const nx = -dy / len
+          const ny = dx / len
+          const tickLen = 4
+          linesLayer.add(new Konva.Line({
+            points: [mx - nx * tickLen, my - ny * tickLen, mx + nx * tickLen, my + ny * tickLen],
+            stroke: accent,
+            strokeWidth: 1,
+            listening: false,
+          }))
+        }
+      }
+    }
+  })
+  linesLayer.draw()
+}
 watch(
   [inProgressPoints, cursorPos],
   () => {
@@ -590,7 +664,10 @@ watch(
 )
 
 watch(() => props.plants, syncPlants, { deep: true })
-
+watch(() => props.lines, syncLines, { deep: true })
+watch(() => props.viewMode, () => {
+  drawGrid()
+})
 function syncPlants(newPlants: Plant[]) {
   if (!plantLayer) return
 
