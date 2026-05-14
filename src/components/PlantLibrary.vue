@@ -2,27 +2,62 @@
 import { ref, computed } from 'vue'
 import { useDragStore } from '@/stores/dragStore'
 import { PLANTS, type PlantAsset } from '@/data/plants'
+import { SYMBOLS, type PlantSymbol, type SymbolCategory } from '@/data/symbols'
 
 const props = defineProps<{
   materials: { name: string; fill: string }[]
   selectedMaterial: { name: string; fill: string }
+  viewMode: 'photo' | 'plan'
 }>()
 
 const emit = defineEmits<{
   'plant-selected': [plant: PlantAsset]
   'select-material': [material: { name: string; fill: string }]
+  'symbol-selected': [symbol: PlantSymbol]
 }>()
 
 const drag = useDragStore()
 const search = ref('')
 const activeTab = ref<'plants' | 'materials'>('plants')
+const categoryNames: Record<SymbolCategory, string> = {
+  tree: 'Trees',
+  shrub: 'Shrubs',
+  hedge: 'Hedges',
+  perennial: 'Perennials',
+  annual: 'Annuals',
+  grass: 'Grasses',
+  vine: 'Vines',
+}
 
 const filteredPlants = computed(() =>
   PLANTS.filter((p) => p.name.toLowerCase().includes(search.value.toLowerCase())),
 )
 
+const filteredSymbols = computed(() =>
+  SYMBOLS.filter((s) => s.name.toLowerCase().includes(search.value.toLowerCase())),
+)
+
+const groupedSymbols = computed(() => {
+  const groups: Record<SymbolCategory, PlantSymbol[]> = {
+    tree: [],
+    shrub: [],
+    hedge: [],
+    perennial: [],
+    annual: [],
+    grass: [],
+    vine: [],
+  }
+  filteredSymbols.value.forEach((s) => groups[s.category].push(s))
+  return groups
+})
+
 function initials(name: string) {
-  return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 3)
+  return name
+    .split(' ')
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 3)
 }
 
 let pendingPlant: PlantAsset | null = null
@@ -63,30 +98,66 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
       <div class="lib-title">Library</div>
       <input v-model="search" class="lib-search" placeholder="Search..." />
       <div class="lib-tabs">
-        <div class="lib-tab" :class="{ active: activeTab === 'plants' }" @click="activeTab = 'plants'">Plants</div>
-        <div class="lib-tab" :class="{ active: activeTab === 'materials' }" @click="activeTab = 'materials'">Materials</div>
+        <div
+          class="lib-tab"
+          :class="{ active: activeTab === 'plants' }"
+          @click="activeTab = 'plants'"
+        >
+          Plants
+        </div>
+        <div
+          class="lib-tab"
+          :class="{ active: activeTab === 'materials' }"
+          @click="activeTab = 'materials'"
+        >
+          Materials
+        </div>
       </div>
     </div>
 
     <!-- Plants tab -->
     <div v-if="activeTab === 'plants'" class="lib-body">
-      <div
-        v-for="plant in filteredPlants"
-        :key="plant.name"
-        class="plant-item"
-        @mousedown="onMouseDown($event, plant)"
-        @touchstart.prevent="onTouchStart($event, plant)"
-        @dragstart.prevent
-        @click="onClick($event, plant)"
-      >
-        <div class="plant-thumb">
-          <img v-if="plant.src" :src="plant.src" :alt="plant.name" draggable="false" />
-          <span v-else>{{ initials(plant.name) }}</span>
+      <!-- Photo view: image-based plants -->
+      <template v-if="viewMode === 'photo'">
+        <div
+          v-for="plant in filteredPlants"
+          :key="plant.name"
+          class="plant-item"
+          @mousedown="onMouseDown($event, plant)"
+          @touchstart.prevent="onTouchStart($event, plant)"
+          @dragstart.prevent
+          @click="onClick($event, plant)"
+        >
+          <div class="plant-thumb">
+            <img v-if="plant.src" :src="plant.src" :alt="plant.name" draggable="false" />
+            <span v-else>{{ initials(plant.name) }}</span>
+          </div>
+          <div class="plant-info">
+            <div class="plant-name">{{ plant.name }}</div>
+          </div>
         </div>
-        <div class="plant-info">
-          <div class="plant-name">{{ plant.name }}</div>
-        </div>
-      </div>
+      </template>
+
+      <!-- Plan view: symbol library grouped by category -->
+      <template v-else>
+        <template v-for="(symbols, cat) in groupedSymbols" :key="cat">
+          <template v-if="symbols.length">
+            <div class="lib-section">{{ categoryNames[cat] }}</div>
+            <div
+              v-for="symbol in symbols"
+              :key="symbol.id"
+              class="plant-item"
+              @click="$emit('symbol-selected', symbol)"
+            >
+              <div class="plant-thumb symbol-thumb">{{ symbol.category[0]?.toUpperCase() }}</div>
+              <div class="plant-info">
+                <div class="plant-name">{{ symbol.name }}</div>
+                <div class="plant-meta">{{ symbol.defaultDiameter }} ft</div>
+              </div>
+            </div>
+          </template>
+        </template>
+      </template>
     </div>
 
     <!-- Materials tab -->
@@ -140,8 +211,12 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
   outline: none;
   margin-bottom: 8px;
 }
-.lib-search::placeholder { color: var(--text-muted); }
-.lib-search:focus { border-color: var(--accent); }
+.lib-search::placeholder {
+  color: var(--text-muted);
+}
+.lib-search:focus {
+  border-color: var(--accent);
+}
 .lib-tabs {
   display: flex;
 }
@@ -157,8 +232,15 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
   cursor: pointer;
   border-bottom: 2px solid transparent;
 }
-.lib-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.lib-body { flex: 1; overflow-y: auto; padding: 4px 6px; }
+.lib-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.lib-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px;
+}
 .lib-section {
   font-size: 9px;
   font-weight: 600;
@@ -176,7 +258,9 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
   cursor: pointer;
   user-select: none;
 }
-.plant-item:hover { background: var(--hover); }
+.plant-item:hover {
+  background: var(--hover);
+}
 .plant-thumb {
   width: 32px;
   height: 32px;
@@ -192,8 +276,15 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
   flex-shrink: 0;
   overflow: hidden;
 }
-.plant-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.plant-name { font-size: 12px; color: var(--text-secondary); }
+.plant-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.plant-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
 .mat-item {
   display: flex;
   align-items: center;
@@ -203,9 +294,32 @@ function onTouchStart(e: TouchEvent, plant: PlantAsset) {
   cursor: pointer;
   border: 1px solid transparent;
 }
-.mat-item:hover { background: var(--hover); }
-.mat-item.active { border-color: var(--accent); background: var(--accent-subtle); }
-.mat-dot { width: 24px; height: 24px; border-radius: 4px; flex-shrink: 0; }
-.mat-name { font-size: 12px; color: var(--text-secondary); }
-.mat-item.active .mat-name { color: var(--text-primary); }
+.mat-item:hover {
+  background: var(--hover);
+}
+.mat-item.active {
+  border-color: var(--accent);
+  background: var(--accent-subtle);
+}
+.mat-dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.mat-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.mat-item.active .mat-name {
+  color: var(--text-primary);
+}
+.plant-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.symbol-thumb {
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}
 </style>

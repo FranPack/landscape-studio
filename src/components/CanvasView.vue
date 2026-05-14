@@ -13,6 +13,8 @@ interface Plant {
   scaleX: number
   scaleY: number
   rotation: number
+  symbolType?: string
+  diameter?: number
 }
 interface GroundCover {
   id: number
@@ -25,7 +27,7 @@ interface GroundCover {
 const props = defineProps<{
   backgroundImage: string | null
   plants: Plant[]
-  drawMode: boolean
+  activeTool: 'select' | 'ground-cover' | 'hardscape' | 'structure' | 'line-fence' | 'line-property'
   groundCovers: GroundCover[]
   selectedMaterial: { name: string; fill: string }
   selectedCoverId: number | null
@@ -55,6 +57,10 @@ const canvasEl = ref<HTMLDivElement | null>(null)
 const inProgressPoints = ref<number[]>([])
 const cursorPos = ref<{ x: number; y: number } | null>(null)
 const stageScale = ref(1)
+const isDrawingPolygon = () =>
+  props.activeTool === 'ground-cover' ||
+  props.activeTool === 'hardscape' ||
+  props.activeTool === 'structure'
 
 let stage: Konva.Stage
 let bgLayer: Konva.Layer
@@ -228,7 +234,7 @@ function initStage() {
   stage.add(plantLayer) // make sure plantLayer is added AFTER so it's on top
 
   stage.on('click', () => {
-    if (!props.drawMode) return
+    if (!isDrawingPolygon()) return
     const pos = stage.getRelativePointerPosition()
     if (!pos) return
 
@@ -255,7 +261,7 @@ function initStage() {
   })
 
   stage.on('dblclick', () => {
-    if (!props.drawMode) return
+    if (!isDrawingPolygon()) return
     // Remove the 2 extra points added by the preceding click events
     const pts = inProgressPoints.value.slice(0, -4)
     if (pts.length < 6) return // need at least 3 points
@@ -277,7 +283,7 @@ function initStage() {
     } else {
       emit('cursor-move', null)
     }
-    if (props.drawMode && pos) cursorPos.value = pos
+    if (isDrawingPolygon() && pos) cursorPos.value = pos
   })
 
   stage.on('mouseleave', () => emit('cursor-move', null))
@@ -391,7 +397,7 @@ function drawBackground() {
 watch(() => props.dimBackground, drawBackground)
 watch(() => props.groundCovers, syncGroundCovers, { deep: true })
 watch(
-  () => props.drawMode,
+  () => props.activeTool,
   () => syncGroundCovers(props.groundCovers),
 )
 watch(
@@ -399,7 +405,7 @@ watch(
   () => syncGroundCovers(props.groundCovers),
 )
 watch(
-  () => props.drawMode,
+  () => props.activeTool,
   (val) => {
     if (stage) stage.container().style.cursor = val ? 'crosshair' : 'default'
   },
@@ -463,7 +469,7 @@ function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
   groundCoverLayer.destroyChildren()
   covers.forEach((cover) => {
-    const group = new Konva.Group({ draggable: !props.drawMode && !props.disableZoom })
+    const group = new Konva.Group({ draggable: !isDrawingPolygon() && !props.disableZoom })
 
     const patternCanvas = createPatternCanvas(cover.material, cover.fill)
 
@@ -625,65 +631,147 @@ function syncPlants(newPlants: Plant[]) {
   newPlants.forEach((plant) => {
     if (plantLayer.findOne(`#${plant.id}`)) return
 
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const node = new Konva.Image({
-        id: String(plant.id),
-        name: 'plant',
-        image: img,
-        x: plant.x,
-        y: plant.y,
-        width: plant.width,
-        height: plant.height,
-        scaleX: plant.scaleX,
-        scaleY: plant.scaleY,
-        rotation: plant.rotation,
-        draggable: !props.disableZoom,
-        offsetX: plant.width / 2,
-        offsetY: plant.height,
-      })
-
-      node.on('click tap', () => {
-        transformer.nodes([node])
-        emit('selection-changed', plant.id)
-        plantLayer.draw()
-      })
-      node.on('contextmenu', (e) => {
-        e.evt.preventDefault()
-        transformer.nodes([node])
-        emit('selection-changed', plant.id)
-        emit('context-menu', {
-          x: e.evt.clientX,
-          y: e.evt.clientY,
-          targetType: 'plant',
-          targetId: plant.id,
-        })
-      })
-      node.on('transformend dragend', () => {
-        const p = props.plants.find((p) => p.id === Number(node.id()))
-        if (!p) return
-        p.x = node.x()
-        p.y = node.y()
-        p.scaleX = node.scaleX()
-        p.scaleY = node.scaleY()
-        p.rotation = node.rotation()
-      })
-      node.on('dragstart transformstart', () => {
-        if (!isUpdating) emit('push-history')
-      })
-      node.on('dragmove', () => {
-        if (!props.snapToGrid) return
-        const s = getMinorSpacing()
-        node.x(Math.round((node.x() - imagePos.x) / s) * s + imagePos.x)
-        node.y(Math.round((node.y() - imagePos.y) / s) * s + imagePos.y)
-      })
+    if (plant.symbolType) {
+      // Plan-view symbol
+      const node = createSymbolNode(plant)
       plantLayer.add(node)
       transformer.moveToTop()
       plantLayer.draw()
+    } else {
+      // Photo-view image
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.onload = () => {
+        const node = new Konva.Image({
+          id: String(plant.id),
+          name: 'plant',
+          image: img,
+          x: plant.x,
+          y: plant.y,
+          width: plant.width,
+          height: plant.height,
+          scaleX: plant.scaleX,
+          scaleY: plant.scaleY,
+          rotation: plant.rotation,
+          draggable: !props.disableZoom,
+          offsetX: plant.width / 2,
+          offsetY: plant.height,
+        })
+        attachPlantHandlers(node, plant)
+        plantLayer.add(node)
+        transformer.moveToTop()
+        plantLayer.draw()
+      }
+      img.src = plant.src
     }
-    img.src = plant.src
   })
+}
+
+function attachPlantHandlers(node: Konva.Node, plant: Plant) {
+  node.on('click tap', () => {
+    transformer.nodes([node])
+    emit('selection-changed', plant.id)
+    plantLayer.draw()
+  })
+  node.on('contextmenu', (e) => {
+    e.evt.preventDefault()
+    transformer.nodes([node])
+    emit('selection-changed', plant.id)
+    emit('context-menu', {
+      x: e.evt.clientX,
+      y: e.evt.clientY,
+      targetType: 'plant',
+      targetId: plant.id,
+    })
+  })
+  node.on('transformend dragend', () => {
+    const p = props.plants.find((p) => p.id === Number(node.id()))
+    if (!p) return
+    p.x = node.x()
+    p.y = node.y()
+    p.scaleX = node.scaleX()
+    p.scaleY = node.scaleY()
+    p.rotation = node.rotation()
+  })
+  node.on('dragstart transformstart', () => {
+    if (!isUpdating) emit('push-history')
+  })
+  node.on('dragmove', () => {
+    if (!props.snapToGrid) return
+    const s = getMinorSpacing()
+    node.x(Math.round((node.x() - imagePos.x) / s) * s + imagePos.x)
+    node.y(Math.round((node.y() - imagePos.y) / s) * s + imagePos.y)
+  })
+}
+
+function createSymbolNode(plant: Plant): Konva.Group {
+  const group = new Konva.Group({
+    id: String(plant.id),
+    name: 'plant',
+    x: plant.x,
+    y: plant.y,
+    scaleX: plant.scaleX,
+    scaleY: plant.scaleY,
+    rotation: plant.rotation,
+    draggable: !props.disableZoom,
+  })
+
+  const radius = plant.diameter! / 2
+  const accent =
+    getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7ec87e'
+
+  // Base circle (canopy) for all symbol types
+  group.add(
+    new Konva.Circle({
+      radius,
+      stroke: accent,
+      strokeWidth: 1.5,
+      fill: 'rgba(126,200,126,0.08)',
+    }),
+  )
+
+  // Center dot
+  group.add(
+    new Konva.Circle({
+      radius: 1.5,
+      fill: accent,
+    }),
+  )
+
+  // Type-specific overlay
+  if (plant.symbolType?.startsWith('tree-evergreen') || plant.symbolType === 'tree-conifer') {
+    // 8-point star outline for evergreens
+    const spikes = 8
+    const points: number[] = []
+    for (let i = 0; i < spikes * 2; i++) {
+      const r = i % 2 === 0 ? radius : radius * 0.7
+      const angle = (i / (spikes * 2)) * Math.PI * 2 - Math.PI / 2
+      points.push(Math.cos(angle) * r, Math.sin(angle) * r)
+    }
+    group.add(new Konva.Line({ points, stroke: accent, strokeWidth: 1, closed: true }))
+  } else if (plant.symbolType === 'tree-deciduous') {
+    // Cross lines for deciduous
+    const r = radius * 0.7
+    group.add(new Konva.Line({ points: [-r, 0, r, 0], stroke: accent, strokeWidth: 1 }))
+    group.add(new Konva.Line({ points: [0, -r, 0, r], stroke: accent, strokeWidth: 1 }))
+    group.add(
+      new Konva.Line({
+        points: [-r * 0.7, -r * 0.7, r * 0.7, r * 0.7],
+        stroke: accent,
+        strokeWidth: 1,
+      }),
+    )
+    group.add(
+      new Konva.Line({
+        points: [-r * 0.7, r * 0.7, r * 0.7, -r * 0.7],
+        stroke: accent,
+        strokeWidth: 1,
+      }),
+    )
+  }
+
+  attachPlantHandlers(group, plant)
+  return group
 }
 
 function exportImage() {

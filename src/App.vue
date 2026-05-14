@@ -14,6 +14,7 @@ import CanvasSettingsModal from '@/components/CanvasSettingsModal.vue'
 import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal.vue'
 import AboutModal from '@/components/AboutModal.vue'
 import HomeScreen from '@/components/HomeScreen.vue'
+import type { PlantSymbol } from '@/data/symbols'
 
 interface Plant {
   id: number
@@ -26,6 +27,8 @@ interface Plant {
   scaleX: number
   scaleY: number
   rotation: number
+  symbolType?: string
+  diameter?: number
 }
 
 interface GroundCover {
@@ -46,8 +49,9 @@ const selectedCoverId = ref<number | null>(null)
 let nextPlantId = 1
 const fileInput = ref<HTMLInputElement | null>(null)
 const canvasRef = ref<InstanceType<typeof CanvasView> | null>(null)
-const drawMode = ref(false)
-const selectedMaterial = ref<{ name: string; fill: string }>({ name: 'turf', fill: '#4a7c3f' })
+type Tool = 'select' | 'ground-cover' | 'hardscape' | 'structure' | 'line-fence' | 'line-property'
+const activeTool = ref<Tool>('select')
+const selectedMaterial = ref<{ name: string; fill: string; category: string }>({ name: 'turf', fill: '#4a7c3f', category: 'cover' })
 // eslint-disable-next-line prefer-const, @typescript-eslint/no-unused-vars
 let nextCoverId = 1
 const loadInput = ref<HTMLInputElement | null>(null)
@@ -73,15 +77,27 @@ const planPlants = ref<Plant[]>([])
 const planGroundCovers = ref<GroundCover[]>([])
 
 const materials = [
-  { name: 'turf', fill: '#4a7c3f' },
-  { name: 'mulch', fill: '#6b3a2a' },
-  { name: 'gravel', fill: '#9e9e9e' },
-  { name: 'sand', fill: '#c2a96e' },
-  { name: 'concrete', fill: '#b0b0b0' },
+  // Ground cover
+  { name: 'turf', fill: '#4a7c3f', category: 'cover' },
+  { name: 'mulch', fill: '#6b3a2a', category: 'cover' },
+  { name: 'gravel', fill: '#9e9e9e', category: 'cover' },
+  { name: 'sand', fill: '#c2a96e', category: 'cover' },
+
+  // Hardscape
+  { name: 'concrete', fill: '#b0b0b0', category: 'hardscape' },
+  { name: 'asphalt', fill: '#3a3a3a', category: 'hardscape' },
+  { name: 'pavers', fill: '#8b6849', category: 'hardscape' },
+  { name: 'deck', fill: '#8b6f47', category: 'hardscape' },
+  { name: 'pool', fill: '#7fb5d4', category: 'hardscape' },
+
+  // Structures
+  { name: 'house', fill: '#4a4a4a', category: 'structure' },
+  { name: 'garage', fill: '#5a5a5a', category: 'structure' },
+  { name: 'shed', fill: '#6a6a6a', category: 'structure' },
 ]
 
 const plants = computed({
-  get: () => currentView.value === 'photo' ? photoPlants.value : planPlants.value,
+  get: () => (currentView.value === 'photo' ? photoPlants.value : planPlants.value),
   set: (val) => {
     if (currentView.value === 'photo') photoPlants.value = val
     else planPlants.value = val
@@ -89,7 +105,7 @@ const plants = computed({
 })
 
 const groundCovers = computed({
-  get: () => currentView.value === 'photo' ? photoGroundCovers.value : planGroundCovers.value,
+  get: () => (currentView.value === 'photo' ? photoGroundCovers.value : planGroundCovers.value),
   set: (val) => {
     if (currentView.value === 'photo') photoGroundCovers.value = val
     else planGroundCovers.value = val
@@ -173,6 +189,12 @@ watch(contextMenu, (val) => {
     window.removeEventListener('click', onWindowClick)
     window.removeEventListener('wheel', onWheel)
   }
+})
+
+watch(activeTool, (tool) => {
+  if (tool === 'ground-cover') selectedMaterial.value = materials.find((m) => m.category === 'cover')!
+  else if (tool === 'hardscape') selectedMaterial.value = materials.find((m) => m.category === 'hardscape')!
+  else if (tool === 'structure') selectedMaterial.value = materials.find((m) => m.category === 'structure')!
 })
 
 function onWheel(e: WheelEvent) {
@@ -351,6 +373,30 @@ function undo() {
   }
 }
 
+function onSymbolSelected(symbol: PlantSymbol) {
+  history.push(plants.value, groundCovers.value)
+  const center = canvasRef.value?.getCenter() ?? { x: 200, y: 200 }
+
+  // Convert real-world diameter to stage units
+  const stagePxPerUnit = scaleFeetPer100px.value ? 100 / scaleFeetPer100px.value : 10
+  const diameterPx = symbol.defaultDiameter * stagePxPerUnit
+
+  plants.value.push({
+    id: nextPlantId++,
+    src: '',
+    name: symbol.name,
+    x: center.x,
+    y: center.y,
+    width: diameterPx,
+    height: diameterPx,
+    scaleX: 1,
+    scaleY: 1,
+    rotation: 0,
+    symbolType: symbol.type,
+    diameter: diameterPx,
+  })
+}
+
 function redo() {
   const next = history.redo(plants.value, groundCovers.value)
   if (next) {
@@ -437,7 +483,8 @@ useKeyboard({
   onReset: resetZoom,
   onDuplicate: duplicateSelected,
   onRemoveVertex: () => {
-    if (drawMode.value) canvasRef.value?.removeLastVertex()
+    if (activeTool.value === 'ground-cover' || activeTool.value === 'hardscape')
+      canvasRef.value?.removeLastVertex()
     else deleteSelected()
   },
 })
@@ -484,31 +531,34 @@ onMounted(() => {
     <template v-else>
       <!-- prettier-ignore -->
       <PropertyBar
-      :selected-id="selectedId"
-      :selected-cover-id="selectedCoverId"
-      :selected-cover-opacity="selectedCoverOpacity"
-      :project-name="projectName"
-      :draw-mode="drawMode"
-      @delete="deleteSelected"
-      @flip-h="flipSelected"
-      @flip-v="flipSelectedV"
-      @duplicate="duplicateSelected"
-      @bring-forward="bringForward"
-      @send-back="sendBack"
-      @opacity-changed="setCoverOpacity($event)"
-      @opacity-committed="commitCoverOpacity"
-      @update:project-name="projectName = $event"
-      @cancel-draw="drawMode = false; canvasRef?.cancelDraw()"
-    />
+  :selected-id="selectedId"
+  :selected-cover-id="selectedCoverId"
+  :selected-cover-opacity="selectedCoverOpacity"
+  :project-name="projectName"
+  :active-tool="activeTool"
+  :materials="materials"
+  :selected-material="selectedMaterial"
+  @delete="deleteSelected"
+  @flip-h="flipSelected"
+  @flip-v="flipSelectedV"
+  @duplicate="duplicateSelected"
+  @bring-forward="bringForward"
+  @send-back="sendBack"
+  @opacity-changed="setCoverOpacity($event)"
+  @opacity-committed="commitCoverOpacity"
+  @update:project-name="projectName = $event"
+  @cancel-draw="activeTool = 'select'; canvasRef?.cancelDraw()"
+  @select-material="selectedMaterial = $event"
+/>
       <div class="workspace">
-        <ToolStrip :draw-mode="drawMode" @toggle-draw-mode="drawMode = !drawMode" />
+        <ToolStrip :active-tool="activeTool" @set-tool="activeTool = $event" />
         <!-- prettier-ignore -->
         <CanvasView
         ref="canvasRef"
         :background-image="currentView === 'photo' ? backgroundImage : null"
         :plants="plants"
         :ground-covers="groundCovers"
-        :draw-mode="drawMode"
+        :active-tool="activeTool"
         :selected-material="selectedMaterial"
         :selected-cover-id="selectedCoverId"
         :scale-feet-per100px="scaleFeetPer100px"
@@ -531,6 +581,8 @@ onMounted(() => {
           :selected-material="selectedMaterial"
           @plant-selected="addPlant"
           @select-material="selectedMaterial = $event"
+          :view-mode="currentView"
+          @symbol-selected="onSymbolSelected"
         />
       </div>
       <StatusBar
@@ -539,7 +591,7 @@ onMounted(() => {
         :cursor-y="cursorPos?.y ?? null"
         :scale-feet-per100px="scaleFeetPer100px"
         :units="units"
-        :active-tool="drawMode ? 'Draw' : 'Select'"
+        :active-tool="activeTool === 'select' ? 'Select' : 'Draw'"
       />
     </template>
 
