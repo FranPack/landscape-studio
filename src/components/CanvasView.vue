@@ -28,11 +28,23 @@ interface Line {
   points: number[]
   type: 'fence' | 'property'
 }
+interface Bed {
+  id: number
+  points: number[]
+  label?: string
+}
 
 const props = defineProps<{
   backgroundImage: string | null
   plants: Plant[]
-  activeTool: 'select' | 'ground-cover' | 'hardscape' | 'structure' | 'line-fence' | 'line-property'
+  activeTool:
+    | 'select'
+    | 'ground-cover'
+    | 'hardscape'
+    | 'structure'
+    | 'bed'
+    | 'line-fence'
+    | 'line-property'
   groundCovers: GroundCover[]
   selectedMaterial: { name: string; fill: string }
   selectedCoverId: number | null
@@ -43,6 +55,7 @@ const props = defineProps<{
   snapToGrid: boolean
   viewMode: 'photo' | 'plan'
   lines: Line[]
+  beds: Bed[]
 }>()
 
 const emit = defineEmits<{
@@ -57,6 +70,7 @@ const emit = defineEmits<{
   'zoom-change': [zoom: number]
   'cursor-move': [pos: { x: number; y: number } | null]
   'add-line': [line: Line]
+  'add-bed': [bed: Bed]
 }>()
 
 const wrapperRef = ref<HTMLDivElement | null>(null)
@@ -67,7 +81,8 @@ const stageScale = ref(1)
 const isDrawingPolygon = () =>
   props.activeTool === 'ground-cover' ||
   props.activeTool === 'hardscape' ||
-  props.activeTool === 'structure'
+  props.activeTool === 'structure' ||
+  props.activeTool === 'bed'
 const isDrawingLine = () =>
   props.activeTool === 'line-fence' || props.activeTool === 'line-property'
 let stage: Konva.Stage
@@ -81,6 +96,7 @@ let spaceKeyUp: (e: KeyboardEvent) => void
 let groundCoverLayer: Konva.Layer
 let imagePos = { x: 0, y: 0 }
 let linesLayer: Konva.Layer
+let bedsLayer: Konva.Layer
 
 onMounted(() => {
   initStage()
@@ -241,6 +257,8 @@ function initStage() {
   })
   groundCoverLayer = new Konva.Layer()
   stage.add(groundCoverLayer)
+  bedsLayer = new Konva.Layer()
+  stage.add(bedsLayer)
   linesLayer = new Konva.Layer()
   stage.add(linesLayer)
   stage.add(plantLayer) // make sure plantLayer is added AFTER so it's on top
@@ -256,13 +274,17 @@ function initStage() {
         const firstY = inProgressPoints.value[1]!
         const dist = Math.hypot(pos.x - firstX, pos.y - firstY)
         if (dist < 12 / stage.scaleX()) {
-          emit('add-ground-cover', {
-            id: Date.now(),
-            points: inProgressPoints.value,
-            material: props.selectedMaterial.name,
-            fill: props.selectedMaterial.fill,
-            opacity: 1,
-          })
+          if (props.activeTool === 'bed') {
+            emit('add-bed', { id: Date.now(), points: inProgressPoints.value })
+          } else {
+            emit('add-ground-cover', {
+              id: Date.now(),
+              points: inProgressPoints.value,
+              material: props.selectedMaterial.name,
+              fill: props.selectedMaterial.fill,
+              opacity: 1,
+            })
+          }
           inProgressPoints.value = []
           cursorPos.value = null
           return
@@ -278,14 +300,18 @@ function initStage() {
     const pts = inProgressPoints.value.slice(0, -4)
 
     if (isDrawingPolygon()) {
-      if (pts.length < 6) return // need 3+ vertices
-      emit('add-ground-cover', {
-        id: Date.now(),
-        points: pts,
-        material: props.selectedMaterial.name,
-        fill: props.selectedMaterial.fill,
-        opacity: 1,
-      })
+      if (pts.length < 6) return
+      if (props.activeTool === 'bed') {
+        emit('add-bed', { id: Date.now(), points: pts })
+      } else {
+        emit('add-ground-cover', {
+          id: Date.now(),
+          points: pts,
+          material: props.selectedMaterial.name,
+          fill: props.selectedMaterial.fill,
+          opacity: 1,
+        })
+      }
       inProgressPoints.value = []
       cursorPos.value = null
     } else if (isDrawingLine()) {
@@ -486,7 +512,37 @@ function createPatternCanvas(material: string, fill: string): HTMLCanvasElement 
 
   return c
 }
+function syncBeds(beds: Bed[]) {
+  if (!bedsLayer) return
+  bedsLayer.destroyChildren()
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7ec87e'
 
+  beds.forEach((bed) => {
+    // Bed fill (mulch color)
+    const fill = new Konva.Line({
+      id: String(bed.id),
+      name: 'bed',
+      points: bed.points,
+      fill: '#6b3a2a',
+      opacity: 0.4,
+      closed: true,
+      listening: true,
+    })
+    bedsLayer.add(fill)
+
+    // Bed outline (visible border)
+    const outline = new Konva.Line({
+      points: bed.points,
+      stroke: accent,
+      strokeWidth: 2,
+      closed: true,
+      listening: false,
+    })
+    bedsLayer.add(outline)
+  })
+  bedsLayer.draw()
+}
+watch(() => props.beds, syncBeds, { deep: true })
 function syncGroundCovers(covers: GroundCover[]) {
   if (!groundCoverLayer) return
   groundCoverLayer.destroyChildren()
@@ -573,7 +629,8 @@ function syncLines(lines: Line[]) {
   if (!linesLayer) return
   linesLayer.destroyChildren()
   lines.forEach((line) => {
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7ec87e'
+    const accent =
+      getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#7ec87e'
     const isFence = line.type === 'fence'
 
     const shape = new Konva.Line({
@@ -609,12 +666,14 @@ function syncLines(lines: Line[]) {
           const nx = -dy / len
           const ny = dx / len
           const tickLen = 4
-          linesLayer.add(new Konva.Line({
-            points: [mx - nx * tickLen, my - ny * tickLen, mx + nx * tickLen, my + ny * tickLen],
-            stroke: accent,
-            strokeWidth: 1,
-            listening: false,
-          }))
+          linesLayer.add(
+            new Konva.Line({
+              points: [mx - nx * tickLen, my - ny * tickLen, mx + nx * tickLen, my + ny * tickLen],
+              stroke: accent,
+              strokeWidth: 1,
+              listening: false,
+            }),
+          )
         }
       }
     }
@@ -665,9 +724,12 @@ watch(
 
 watch(() => props.plants, syncPlants, { deep: true })
 watch(() => props.lines, syncLines, { deep: true })
-watch(() => props.viewMode, () => {
-  drawGrid()
-})
+watch(
+  () => props.viewMode,
+  () => {
+    drawGrid()
+  },
+)
 function syncPlants(newPlants: Plant[]) {
   if (!plantLayer) return
 

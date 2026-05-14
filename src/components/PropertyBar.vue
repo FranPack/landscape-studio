@@ -1,5 +1,12 @@
 <script setup lang="ts">
-type Tool = 'select' | 'ground-cover' | 'hardscape' | 'structure' | 'line-fence' | 'line-property'
+type Tool =
+  | 'select'
+  | 'ground-cover'
+  | 'hardscape'
+  | 'structure'
+  | 'line-fence'
+  | 'line-property'
+  | 'bed'
 
 defineProps<{
   selectedId: number | null
@@ -32,6 +39,7 @@ const toolLabels: Record<Tool, string> = {
   structure: 'Structure',
   'line-fence': 'Fence',
   'line-property': 'Property Line',
+  bed: 'Bed',
 }
 </script>
 

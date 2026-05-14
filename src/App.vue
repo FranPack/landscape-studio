@@ -44,7 +44,11 @@ interface Line {
   points: number[]
   type: 'fence' | 'property'
 }
-
+interface Bed {
+  id: number
+  points: number[]
+  label?: string
+}
 const history = useHistoryStore()
 // const isElectron = navigator.userAgent.includes('Electron')
 const stageZoom = ref(1)
@@ -55,7 +59,14 @@ const selectedCoverId = ref<number | null>(null)
 let nextPlantId = 1
 const fileInput = ref<HTMLInputElement | null>(null)
 const canvasRef = ref<InstanceType<typeof CanvasView> | null>(null)
-type Tool = 'select' | 'ground-cover' | 'hardscape' | 'structure' | 'line-fence' | 'line-property'
+type Tool =
+  | 'select'
+  | 'ground-cover'
+  | 'hardscape'
+  | 'structure'
+  | 'bed'
+  | 'line-fence'
+  | 'line-property'
 const activeTool = ref<Tool>('select')
 const selectedMaterial = ref<{ name: string; fill: string; category: string }>({
   name: 'turf',
@@ -87,12 +98,21 @@ const planPlants = ref<Plant[]>([])
 const planGroundCovers = ref<GroundCover[]>([])
 const photoLines = ref<Line[]>([])
 const planLines = ref<Line[]>([])
-
 const lines = computed({
   get: () => (currentView.value === 'photo' ? photoLines.value : planLines.value),
   set: (val) => {
     if (currentView.value === 'photo') photoLines.value = val
     else planLines.value = val
+  },
+})
+const photoBeds = ref<Bed[]>([])
+const planBeds = ref<Bed[]>([])
+
+const beds = computed({
+  get: () => (currentView.value === 'photo' ? photoBeds.value : planBeds.value),
+  set: (val) => {
+    if (currentView.value === 'photo') photoBeds.value = val
+    else planBeds.value = val
   },
 })
 
@@ -147,6 +167,8 @@ function newProject(type: 'photo' | 'plan') {
   projectOpen.value = true
   photoLines.value = []
   planLines.value = []
+  photoBeds.value = []
+  planBeds.value = []
 
   if (type === 'plan') {
     showGrid.value = true
@@ -259,6 +281,10 @@ function addGroundCover(cover: GroundCover) {
 function addLine(line: Line) {
   history.push(plants.value, groundCovers.value)
   lines.value.push(line)
+}
+function addBed(bed: Bed) {
+  history.push(plants.value, groundCovers.value)
+  beds.value.push(bed)
 }
 function onCoverMoved(payload: { id: number; points: number[] }) {
   const cover = groundCovers.value.find((c) => c.id === payload.id)
@@ -449,11 +475,13 @@ function saveProject() {
       plants: photoPlants.value,
       groundCovers: photoGroundCovers.value,
       lines: photoLines.value,
+      beds: photoBeds.value,
     },
     planView: {
       plants: planPlants.value,
       groundCovers: planGroundCovers.value,
       lines: planLines.value,
+      beds: planBeds.value,
     },
   }
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
@@ -492,6 +520,8 @@ function onLoadFile(e: Event) {
       selectedCoverId.value = null
       history.clear()
       projectOpen.value = true
+      photoBeds.value = data.photoView?.beds ?? []
+      planBeds.value = data.planView?.beds ?? []
     } catch {
       console.error('Failed to load project')
     }
@@ -622,6 +652,8 @@ onMounted(() => {
         :view-mode="currentView"
         :lines="lines"
         @add-line="addLine"
+        :beds="beds"
+        @add-bed="addBed"
       />
         <PlantLibrary
           :materials="materials"
